@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Trust-Flow</title>
+
+<!-- Secure Content Security Policy -->
+<meta http-equiv="Content-Security-Policy" content="
+    default-src 'self'; 
+    script-src 'self'; 
+    style-src 'self' 'unsafe-inline'; 
+    img-src 'self' data: https:;
+    font-src 'self' https:;
+">
+
+<link rel="stylesheet" href="./index.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+
+</head>
+<body>
+
+<!-- Tabs -->
+<div class="tabs">
+    <div class="new-tab"><i class="fa-solid fa-plus"></i></div>
+</div>
+
+<!-- Navbar -->
+<div class="navbar">
+    <div class="nav-left">
+        <button id="back"><i class="fa-solid fa-arrow-left"></i></button>
+        <button id="forward"><i class="fa-solid fa-arrow-right"></i></button>
+        <button id="reload"><i class="fa-solid fa-rotate-right"></i></button>
+    </div>
+
+    <div class="address-bar">
+        <input id="url" type="text" placeholder="Search Google or type a URL" class="search">
+        <img src="Images/Gemini_3.png" alt="Trust-Flow Logo">
+    </div>
+
+    <div class="nav-right">
+        <button id="go"><i class="fa-solid fa-magnifying-glass"></i></button>
+        <button id="bookmark"><i class="fa-solid fa-star"></i></button>
+        <button id="settings"><i class="fa-solid fa-gear"></i></button>
+    </div>
+</div>
+
+<!-- Browser Area -->
+<div class="browser"></div>
+
+<script type="module" src="./renderer.js"></script>
+</body>
+</html>
