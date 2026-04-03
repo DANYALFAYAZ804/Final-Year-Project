@@ -1,8 +1,8 @@
 {
   "name": "trust-flow",
-  "productName": "trust-flow",
+  "productName": "Trust-Flow",
   "version": "1.0.0",
-  "description": "My Electron application description",
+  "description": "Zero-Trust AI-powered secure web browser with real-time phishing detection",
   "main": ".vite/build/main.js",
   "private": true,
   "scripts": {
@@ -10,9 +10,11 @@
     "package": "electron-forge package",
     "make": "electron-forge make",
     "publish": "electron-forge publish",
-    "lint": "echo \"No linting configured\""
+    "lint": "echo \"No linting configured\"",
+    "ml:install": "pip install -r ml-service/requirements.txt",
+    "ml:train": "python ml-service/train.py"
   },
-  "keywords": [],
+  "keywords": ["browser", "security", "phishing", "zero-trust", "ai"],
   "author": {
     "name": "DANYALFAYAZ804",
     "email": "danyalfayaz892@gmail.com"
