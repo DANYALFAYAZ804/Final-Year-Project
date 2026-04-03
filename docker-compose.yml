@@ -27,7 +27,7 @@ services:
   # ── ML / Flask API ─────────────────────────────────────────
   ml-service:
     build:
-      context: ./ml-service
+      context: ./backend
       dockerfile: Dockerfile
     container_name: trustflow-ml
     restart: unless-stopped

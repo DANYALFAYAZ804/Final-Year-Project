@@ -3,16 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <title>Trust-Flow</title>
-
 <meta http-equiv="Content-Security-Policy" content="
     default-src 'self';
     script-src 'self' 'unsafe-inline';
     style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com;
-    img-src 'self' data: https:;
+    img-src 'self' data: https: blob:;
     font-src 'self' https://cdnjs.cloudflare.com;
     connect-src 'self' https:;
 ">
-
 <link rel="stylesheet" href="./src/index.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 </head>
@@ -20,19 +18,19 @@
 
 <!-- ── Tabs ── -->
 <div class="tabs">
-    <div class="new-tab"><i class="fa-solid fa-plus"></i></div>
+    <div class="new-tab" title="New Tab"><i class="fa-solid fa-plus"></i></div>
 </div>
 
 <!-- ── Navbar ── -->
 <div class="navbar">
     <div class="nav-left">
-        <button id="back" title="Back"><i class="fa-solid fa-arrow-left"></i></button>
+        <button id="back"    title="Back"><i class="fa-solid fa-arrow-left"></i></button>
         <button id="forward" title="Forward"><i class="fa-solid fa-arrow-right"></i></button>
-        <button id="reload" title="Reload"><i class="fa-solid fa-rotate-right"></i></button>
+        <button id="reload"  title="Reload"><i class="fa-solid fa-rotate-right"></i></button>
     </div>
 
     <div class="address-bar">
-        <!-- Shield Badge -->
+        <!-- Shield badge -->
         <div class="shield-badge" id="shield-badge">
             <div class="shield-spinner" id="scan-spinner" style="display:none;"></div>
             <i class="fa-solid fa-shield-halved shield-neutral" id="shield-icon"></i>
@@ -40,11 +38,18 @@
             <div class="shield-tooltip" id="shield-tooltip"></div>
         </div>
 
-        <input id="url" type="text" placeholder="Search Google or type a URL" autocomplete="off">
+        <!-- Search engine selector -->
+        <select id="engine-select" class="engine-select" title="Search engine">
+            <option value="google">G</option>
+            <option value="duckduckgo">DDG</option>
+            <option value="bing">Bing</option>
+        </select>
+
+        <input id="url" type="text" placeholder="Search or enter address…" autocomplete="off" spellcheck="false">
     </div>
 
     <div class="nav-right">
-        <button id="go" title="Go"><i class="fa-solid fa-magnifying-glass"></i></button>
+        <button id="go"       title="Go"><i class="fa-solid fa-magnifying-glass"></i></button>
         <button id="bookmark" title="Bookmark"><i class="fa-solid fa-star"></i></button>
         <button id="settings" title="Settings"><i class="fa-solid fa-gear"></i></button>
     </div>
@@ -61,9 +66,18 @@
     </div>
 
     <div class="panel-section">
+        <label class="panel-label">Default Search Engine</label>
+        <select id="settings-engine" class="panel-input engine-select" style="cursor:pointer;">
+            <option value="google">Google</option>
+            <option value="duckduckgo">DuckDuckGo</option>
+            <option value="bing">Bing</option>
+        </select>
+    </div>
+
+    <div class="panel-section">
         <label class="panel-label">VirusTotal API Key</label>
-        <input type="password" id="vt-key" placeholder="Enter your VT API key" class="panel-input">
-        <small>Get a free key at <a href="#" onclick="return false;" style="color:#60a5fa">virustotal.com</a></small>
+        <input type="password" id="vt-key" placeholder="Paste your VT API key…" class="panel-input">
+        <small>Free key at virustotal.com → My API Key</small>
     </div>
 
     <div class="panel-section">
@@ -85,12 +99,6 @@
     <div class="panel-section">
         <label class="panel-label">Cache</label>
         <button class="btn-panel-secondary" id="clear-cache">Clear Scan Cache</button>
-    </div>
-
-    <div class="panel-section stats-section">
-        <label class="panel-label">Session Stats</label>
-        <div class="stat-row"><span>Sites Scanned</span><b id="stats-scanned">0</b></div>
-        <div class="stat-row"><span>Threats Blocked</span><b id="stats-blocked">0</b></div>
     </div>
 
     <button class="btn-panel-primary" id="save-settings">Save Settings</button>

@@ -1,6 +1,6 @@
-const { safeStorage, app } = require('electron');
-const path = require('path');
-const fs = require('fs');
+import { safeStorage, app } from 'electron';
+import path from 'path';
+import fs from 'fs';
 
 const CONFIG_FILE = path.join(app.getPath('userData'), 'trustflow-config.json');
 
@@ -17,7 +17,7 @@ function saveRaw(data) {
     fs.writeFileSync(CONFIG_FILE, JSON.stringify(data), 'utf8');
 }
 
-function get(key) {
+export function get(key) {
     const raw = loadRaw();
     if (!(key in raw)) return null;
     const entry = raw[key];
@@ -29,7 +29,7 @@ function get(key) {
     return entry.value;
 }
 
-function set(key, value, encrypt = false) {
+export function set(key, value, encrypt = false) {
     const raw = loadRaw();
     if (encrypt && safeStorage.isEncryptionAvailable()) {
         const encrypted = safeStorage.encryptString(value);
@@ -40,10 +40,8 @@ function set(key, value, encrypt = false) {
     saveRaw(raw);
 }
 
-function remove(key) {
+export function remove(key) {
     const raw = loadRaw();
     delete raw[key];
     saveRaw(raw);
 }
-
-module.exports = { get, set, remove };

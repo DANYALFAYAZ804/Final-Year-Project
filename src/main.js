@@ -1,9 +1,13 @@
-const { app, BrowserWindow, ipcMain, session, net } = require('electron');
-const path = require('path');
-const { spawn } = require('child_process');
-const http = require('http');
-const https = require('https');
-const configStore = require('./config-store');
+import { app, BrowserWindow, ipcMain } from 'electron';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { spawn } from 'child_process';
+import http from 'http';
+import https from 'https';
+import * as configStore from './config-store.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // ──────────────────────────────────────────────
 // Stats tracking
@@ -29,12 +33,11 @@ let mlReady = false;
 
 function startMlService() {
     if (USE_EXTERNAL_ML) {
-        // External / Docker backend — skip spawning, probe health instead
         console.log(`[ML] Using external ML service at ${ML_SERVICE_URL}`);
         probeMLHealth();
         return;
     }
-    const mlDir = path.join(__dirname, '..', 'ml-service');
+    const mlDir = path.join(app.getAppPath(), 'backend');
     const scriptPath = path.join(mlDir, 'app.py');
     mlProcess = spawn('python', [scriptPath], {
         cwd: mlDir,
@@ -48,7 +51,6 @@ function startMlService() {
     });
     mlProcess.stderr.on('data', (d) => {
         const msg = d.toString();
-        // Gunicorn prints "Listening at" to stderr
         if (msg.includes('Listening') || msg.includes('Running on')) mlReady = true;
         console.error('[ML-err]', msg.trim());
     });
@@ -73,7 +75,7 @@ function probeMLHealth(retries = 10, delayMs = 2000) {
 }
 
 // ──────────────────────────────────────────────
-// Helper: HTTP request → JSON (Node http/https)
+// Helper: HTTP request → JSON
 // ──────────────────────────────────────────────
 function httpPost(url, body) {
     return new Promise((resolve, reject) => {
@@ -152,8 +154,6 @@ async function scoreWHOIS(url) {
         if (now - cached.ts < WHOIS_TTL_MS) return cached.score;
     }
     try {
-        // Use IANA RDAP (no npm dependency needed)
-        const tld = domain.split('.').slice(-1)[0];
         const rdapUrl = `https://rdap.org/domain/${domain}`;
         const res = await httpGet(rdapUrl);
         if (res.status !== 200) throw new Error('RDAP error');
@@ -161,8 +161,7 @@ async function scoreWHOIS(url) {
         const regEvent = events.find(e => e.eventAction === 'registration');
         let score = 0.5;
         if (regEvent) {
-            const regDate = new Date(regEvent.eventDate);
-            const ageDays = (now - regDate.getTime()) / (1000 * 60 * 60 * 24);
+            const ageDays = (now - new Date(regEvent.eventDate).getTime()) / (1000 * 60 * 60 * 24);
             if (ageDays < 30) score = 0.1;
             else if (ageDays < 180) score = 0.5;
             else score = 0.9;
@@ -182,7 +181,6 @@ async function scoreVirusTotal(url) {
     const apiKey = configStore.get('vtApiKey');
     if (!apiKey) return 0.5;
 
-    // VT URL ID = base64url(url) without padding
     const urlId = Buffer.from(url).toString('base64').replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
     const headers = { 'x-apikey': apiKey };
 
@@ -200,11 +198,8 @@ async function scoreVirusTotal(url) {
     try {
         let score = await fetchResult();
         if (score !== null) return score;
-
-        // Submit URL for scanning
-        const submitRes = await httpPost('https://www.virustotal.com/api/v3/urls', { url });
+        await httpPost('https://www.virustotal.com/api/v3/urls', { url });
         await new Promise(r => setTimeout(r, 2000));
-
         for (let i = 0; i < 3; i++) {
             score = await fetchResult();
             if (score !== null) return score;
@@ -265,7 +260,6 @@ function createWindow() {
     mainWindow = new BrowserWindow({
         width: 1400,
         height: 900,
-        frame: true,
         webPreferences: {
             preload: path.join(__dirname, 'preload.js'),
             contextIsolation: true,
@@ -275,13 +269,12 @@ function createWindow() {
         },
     });
 
-    // MAIN_WINDOW_VITE_DEV_SERVER_URL / MAIN_WINDOW_VITE_NAME are injected by Vite plugin at build time
     if (typeof MAIN_WINDOW_VITE_DEV_SERVER_URL !== 'undefined' && MAIN_WINDOW_VITE_DEV_SERVER_URL) {
         mainWindow.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
     } else if (typeof MAIN_WINDOW_VITE_NAME !== 'undefined') {
         mainWindow.loadFile(path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`));
     } else {
-        mainWindow.loadFile(path.join(__dirname, '../index.html'));
+        mainWindow.loadFile(path.join(app.getAppPath(), 'index.html'));
     }
 }
 
@@ -293,8 +286,6 @@ ipcMain.handle('scan-url', async (event, url) => {
     statsScanned++;
     const result = await computeTrustScore(url, settings);
     if (result.verdict === 'malicious') statsBlocked++;
-
-    // Send keyboard lock/unlock to renderer
     if (mainWindow) {
         if (result.verdict !== 'safe') {
             mainWindow.webContents.send('keyboard-lock', result);
@@ -315,11 +306,7 @@ ipcMain.handle('save-settings', (event, settings) => {
     return true;
 });
 
-ipcMain.handle('clear-cache', () => {
-    whoisCache.clear();
-    return true;
-});
-
+ipcMain.handle('clear-cache', () => { whoisCache.clear(); return true; });
 ipcMain.handle('get-stats', () => ({ scanned: statsScanned, blocked: statsBlocked }));
 
 // ──────────────────────────────────────────────
@@ -333,10 +320,5 @@ app.whenReady().then(() => {
     });
 });
 
-app.on('before-quit', () => {
-    if (mlProcess) mlProcess.kill();
-});
-
-app.on('window-all-closed', () => {
-    if (process.platform !== 'darwin') app.quit();
-});
+app.on('before-quit', () => { if (mlProcess) mlProcess.kill(); });
+app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
