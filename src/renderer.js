@@ -122,7 +122,7 @@ function buildNewTabPage(tabId) {
 
     div.innerHTML = `
         <div class="newtab-inner">
-            <img src="Images/Gemini_3.png" class="center-logo" alt="Trust-Flow">
+            <img src="Images/Trust-Flow-logo.png" class="center-logo" alt="Trust-Flow">
             <h1>Trust-Flow</h1>
             <p class="newtab-tagline">Zero-Trust AI Browser</p>
 
