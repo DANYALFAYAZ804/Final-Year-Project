@@ -260,6 +260,8 @@ function createWindow() {
     mainWindow = new BrowserWindow({
         width: 1400,
         height: 900,
+        icon: path.join(app.getAppPath(), 'Images', 'Trust-Flow-logo.png'),
+        autoHideMenuBar: true,
         webPreferences: {
             preload: path.join(__dirname, 'preload.js'),
             contextIsolation: true,
@@ -268,6 +270,8 @@ function createWindow() {
             webviewTag: true,
         },
     });
+
+    mainWindow.setAlwaysOnTop(true, 'screen');
 
     if (typeof MAIN_WINDOW_VITE_DEV_SERVER_URL !== 'undefined' && MAIN_WINDOW_VITE_DEV_SERVER_URL) {
         mainWindow.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);

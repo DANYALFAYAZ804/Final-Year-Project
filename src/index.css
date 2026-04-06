@@ -45,6 +45,13 @@ body{
 }
 .new-tab:hover{opacity:1;background:rgba(255,255,255,0.1);}
 
+/* ─── Navbar Logo ─── */
+.navbar-logo{
+    width:28px;height:28px;object-fit:contain;flex-shrink:0;
+    filter:brightness(0) invert(1) drop-shadow(0 0 6px rgba(96,165,250,0.5));
+    margin-right:2px;
+}
+
 /* ─── Navbar ─── */
 .navbar{
     display:flex;align-items:center;padding:7px 10px;gap:8px;
@@ -128,7 +135,7 @@ webview{flex:1;border:none;}
     display:flex;flex-direction:column;align-items:center;
     gap:20px;padding:40px 20px;max-width:620px;width:100%;
 }
-.center-logo{width:72px;filter:drop-shadow(0 0 20px #3b82f680);}
+.center-logo{width:80px;height:80px;object-fit:contain;filter:brightness(0) invert(1) drop-shadow(0 0 24px rgba(59,130,246,0.6));}
 .newtab-inner h1{
     font-size:1.9rem;font-weight:600;
     background:linear-gradient(135deg,#60a5fa,#a78bfa);
