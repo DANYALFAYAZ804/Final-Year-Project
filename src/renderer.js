@@ -1,11 +1,11 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// Trust-Flow Renderer — Full Browser with Chromium Search Engine + Security UI
+// Trust-Flow Renderer v3.0 — Dynamic · Animated · Professional
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ──── DOM refs ────
-const tabsContainer = document.querySelector('.tabs');
-const newTabBtn     = document.querySelector('.new-tab');
-const browserArea   = document.querySelector('.browser');
+const tabsContainer = document.getElementById('tabs');
+const newTabBtn     = document.getElementById('new-tab-btn');
+const browserArea   = document.getElementById('browser');
 const backBtn       = document.getElementById('back');
 const forwardBtn    = document.getElementById('forward');
 const reloadBtn     = document.getElementById('reload');
@@ -16,16 +16,90 @@ const settingsBtn   = document.getElementById('settings');
 const shieldIcon    = document.getElementById('shield-icon');
 const shieldLabel   = document.getElementById('shield-label');
 const shieldTooltip = document.getElementById('shield-tooltip');
+const shieldRing    = document.getElementById('shield-ring');
 const settingsPanel = document.getElementById('settings-panel');
 const closePanelBtn = document.getElementById('close-panel');
 const scanSpinner   = document.getElementById('scan-spinner');
+const addrClear     = document.getElementById('addr-clear');
+const navProgress   = document.getElementById('nav-progress');
+const navProgressFill = document.getElementById('nav-progress-fill');
+const panelBackdrop = document.getElementById('panel-backdrop');
+const vtReveal      = document.getElementById('vt-reveal');
+const splashEl      = document.getElementById('splash');
+const splashFill    = document.getElementById('splash-fill');
+const splashStatus  = document.getElementById('splash-status');
 
 // ──── State ────
-let tabs         = [];
-let activeTabId  = 0;
+let tabs           = [];
+let activeTabId    = 0;
 let keyboardLocked = false;
-let settings     = {};
-let searchEngine = 'google'; // default
+let settings       = {};
+let searchEngine   = 'google';
+let navProgressTimer = null;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Toast System
+// ─────────────────────────────────────────────────────────────────────────────
+const toastContainer = document.getElementById('toast-container');
+
+function showToast(message, type = 'info', duration = 3000) {
+    const icons = { safe:'fa-shield-halved', warn:'fa-triangle-exclamation', danger:'fa-skull-crossbones', info:'fa-circle-info' };
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.innerHTML = `<i class="fa-solid ${icons[type] || icons.info}"></i><span>${message}</span>`;
+    toastContainer.appendChild(toast);
+    setTimeout(() => {
+        toast.classList.add('out');
+        toast.addEventListener('animationend', () => toast.remove(), { once: true });
+    }, duration);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Nav Progress Bar
+// ─────────────────────────────────────────────────────────────────────────────
+function startNavProgress() {
+    clearTimeout(navProgressTimer);
+    navProgress.classList.add('active');
+    navProgressFill.style.width = '0%';
+    let w = 0;
+    const tick = () => {
+        w = Math.min(w + (Math.random() * 12 + 4), 88);
+        navProgressFill.style.width = w + '%';
+        if (w < 88) navProgressTimer = setTimeout(tick, 200 + Math.random() * 120);
+    };
+    tick();
+}
+
+function finishNavProgress() {
+    clearTimeout(navProgressTimer);
+    navProgressFill.style.width = '100%';
+    setTimeout(() => {
+        navProgress.classList.remove('active');
+        navProgressFill.style.width = '0%';
+    }, 320);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Splash Screen
+// ─────────────────────────────────────────────────────────────────────────────
+const SPLASH_STEPS = [
+    { pct: 20, msg: 'Loading ML classifier…' },
+    { pct: 45, msg: 'Connecting security engine…' },
+    { pct: 70, msg: 'Initialising WHOIS intelligence…' },
+    { pct: 90, msg: 'Warming up VirusTotal bridge…' },
+    { pct: 100, msg: 'Ready.' },
+];
+
+async function runSplash() {
+    for (const step of SPLASH_STEPS) {
+        splashFill.style.width  = step.pct + '%';
+        splashStatus.textContent = step.msg;
+        await new Promise(r => setTimeout(r, 280 + Math.random() * 180));
+    }
+    await new Promise(r => setTimeout(r, 300));
+    splashEl.classList.add('hide');
+    splashEl.addEventListener('transitionend', () => splashEl.remove(), { once: true });
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Search Engine Config
@@ -37,31 +111,62 @@ const SEARCH_ENGINES = {
 };
 
 function buildSearchUrl(query) {
-    const base = SEARCH_ENGINES[searchEngine] || SEARCH_ENGINES.google;
-    return base + encodeURIComponent(query);
+    return (SEARCH_ENGINES[searchEngine] || SEARCH_ENGINES.google) + encodeURIComponent(query);
 }
 
 function resolveUrl(raw) {
     raw = raw.trim();
     if (!raw) return null;
-    // Already a full URL
     if (/^https?:\/\//i.test(raw)) return raw;
-    // Looks like a domain (has a dot, no spaces)
     if (!raw.includes(' ') && /\.\w{2,}/.test(raw)) return 'https://' + raw;
-    // Treat as a search query
     return buildSearchUrl(raw);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Address bar helpers
+// ─────────────────────────────────────────────────────────────────────────────
+urlInput.addEventListener('input', () => {
+    addrClear.style.display = urlInput.value ? 'flex' : 'none';
+});
+addrClear.addEventListener('click', () => {
+    urlInput.value = '';
+    addrClear.style.display = 'none';
+    urlInput.focus();
+});
+urlInput.addEventListener('focus', () => {
+    urlInput.select();
+});
+
+// VT key reveal
+vtReveal?.addEventListener('click', () => {
+    const inp = document.getElementById('vt-key');
+    const icon = vtReveal.querySelector('i');
+    if (inp.type === 'password') {
+        inp.type = 'text';
+        icon.className = 'fa-regular fa-eye-slash';
+    } else {
+        inp.type = 'password';
+        icon.className = 'fa-regular fa-eye';
+    }
+});
+
+// Settings engine radio sync
+function syncEngineRadios() {
+    document.querySelectorAll('input[name="settings-engine"]').forEach(r => {
+        r.checked = r.value === searchEngine;
+    });
+    document.querySelectorAll('.engine-select').forEach(s => { s.value = searchEngine; });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Tab Management
 // ─────────────────────────────────────────────────────────────────────────────
 function createTab(url = null) {
-    const tabId = Date.now();
-
+    const tabId  = Date.now();
     const tabDiv = document.createElement('div');
     tabDiv.classList.add('tab');
     tabDiv.dataset.id = tabId;
-    tabDiv.innerHTML = `<i class="fa-solid fa-globe"></i><span class="tab-title">New Tab</span><span class="close">&times;</span>`;
+    tabDiv.innerHTML  = `<i class="fa-solid fa-globe"></i><span class="tab-title">New Tab</span><span class="close">&times;</span>`;
     tabsContainer.insertBefore(tabDiv, newTabBtn);
 
     if (!url) {
@@ -78,8 +183,8 @@ function createTab(url = null) {
         navigateTo(url, tabId);
     }
 
-    tabDiv.addEventListener('click', (e) => { if (!e.target.classList.contains('close')) setActiveTab(tabId); });
-    tabDiv.querySelector('.close').addEventListener('click', (e) => { e.stopPropagation(); closeTab(tabId); });
+    tabDiv.addEventListener('click', e => { if (!e.target.classList.contains('close')) setActiveTab(tabId); });
+    tabDiv.querySelector('.close').addEventListener('click', e => { e.stopPropagation(); closeTab(tabId); });
 }
 
 function createWebview(tabId) {
@@ -90,22 +195,41 @@ function createWebview(tabId) {
     wv.setAttribute('allowpopups', '');
 
     wv.addEventListener('did-navigate', () => {
-        if (activeTabId === tabId) urlInput.value = wv.src !== 'about:blank' ? wv.src : '';
+        if (activeTabId === tabId) {
+            urlInput.value = wv.src !== 'about:blank' ? wv.src : '';
+            addrClear.style.display = urlInput.value ? 'flex' : 'none';
+        }
         const t = tabs.find(t => t.id === tabId);
         if (t) t.url = wv.src;
     });
     wv.addEventListener('did-navigate-in-page', () => {
-        if (activeTabId === tabId) urlInput.value = wv.src;
+        if (activeTabId === tabId) {
+            urlInput.value = wv.src;
+            addrClear.style.display = urlInput.value ? 'flex' : 'none';
+        }
     });
-    wv.addEventListener('page-title-updated', (e) => {
+    wv.addEventListener('page-title-updated', e => {
         const t = tabs.find(t => t.id === tabId);
         if (t) t.tabDiv.querySelector('.tab-title').textContent = (e.title || 'Tab').slice(0, 22);
     });
+    wv.addEventListener('page-favicon-updated', e => {
+        const t = tabs.find(t => t.id === tabId);
+        if (t && e.favicons?.[0]) {
+            const icon = t.tabDiv.querySelector('i');
+            const img  = document.createElement('img');
+            img.src    = e.favicons[0];
+            img.style.cssText = 'width:12px;height:12px;object-fit:contain;opacity:0.8;';
+            img.onerror = () => { img.replaceWith(icon); };
+            icon.replaceWith(img);
+        }
+    });
     wv.addEventListener('did-start-loading', () => {
+        startNavProgress();
         const t = tabs.find(t => t.id === tabId);
         if (t && activeTabId === tabId) reloadBtn.innerHTML = '<i class="fa-solid fa-xmark"></i>';
     });
     wv.addEventListener('did-stop-loading', () => {
+        finishNavProgress();
         reloadBtn.innerHTML = '<i class="fa-solid fa-rotate-right"></i>';
     });
     return wv;
@@ -133,13 +257,21 @@ function buildNewTabPage(tabId) {
                 <div class="newtab-search-bar">
                     <i class="fa-solid fa-magnifying-glass nt-search-icon"></i>
                     <input type="text" class="nt-url-input" placeholder="Search the web or enter a URL…" autocomplete="off" spellcheck="false">
-                    <button class="nt-go-btn"><i class="fa-solid fa-arrow-right"></i></button>
+                    <button class="nt-go-btn" title="Go"><i class="fa-solid fa-arrow-right"></i></button>
                 </div>
             </div>
 
             <div class="newtab-stats">
-                <div class="stat-card"><i class="fa-solid fa-shield-halved"></i><span class="nt-scanned">0</span><small>Sites Scanned</small></div>
-                <div class="stat-card danger"><i class="fa-solid fa-skull-crossbones"></i><span class="nt-blocked">0</span><small>Threats Blocked</small></div>
+                <div class="stat-card">
+                    <i class="fa-solid fa-shield-halved"></i>
+                    <span class="stat-num nt-scanned">0</span>
+                    <small>Sites Scanned</small>
+                </div>
+                <div class="stat-card danger">
+                    <i class="fa-solid fa-skull-crossbones"></i>
+                    <span class="stat-num nt-blocked">0</span>
+                    <small>Threats Blocked</small>
+                </div>
             </div>
 
             <div class="newtab-quick-links">
@@ -152,8 +284,7 @@ function buildNewTabPage(tabId) {
             </div>
 
             <div class="newtab-bookmarks-section" id="nt-bookmarks-${tabId}"></div>
-        </div>
-    `;
+        </div>`;
 
     setTimeout(() => {
         const ntInput = div.querySelector('.nt-url-input');
@@ -163,7 +294,7 @@ function buildNewTabPage(tabId) {
         ntEng.addEventListener('change', () => {
             searchEngine = ntEng.value;
             localStorage.setItem('searchEngine', searchEngine);
-            syncEngineSelectors();
+            syncEngineRadios();
         });
 
         const go = () => {
@@ -174,7 +305,6 @@ function buildNewTabPage(tabId) {
         ntInput.addEventListener('keydown', e => { if (e.key === 'Enter') go(); });
         ntInput.focus();
 
-        // Quick links
         div.querySelectorAll('.quick-link').forEach(a => {
             a.addEventListener('click', e => { e.preventDefault(); navigateTo(a.dataset.url, tabId); });
         });
@@ -200,15 +330,33 @@ function renderNewtabBookmarks(container) {
     });
 }
 
+// Animated counter
+function animateCounter(el, target) {
+    const start = parseInt(el.textContent, 10) || 0;
+    if (start === target) return;
+    const diff   = target - start;
+    const steps  = Math.min(Math.abs(diff), 20);
+    let   step   = 0;
+    const tick   = () => {
+        step++;
+        el.textContent = Math.round(start + (diff * step / steps));
+        el.classList.add('bump');
+        el.addEventListener('animationend', () => el.classList.remove('bump'), { once: true });
+        if (step < steps) setTimeout(tick, 30);
+    };
+    tick();
+}
+
 async function refreshStats(container = null) {
     if (!window.trustflow) return;
     const st = await window.trustflow.getStats().catch(() => ({ scanned: 0, blocked: 0 }));
-    if (container) {
-        const sc = container.querySelector('.nt-scanned');
-        const bl = container.querySelector('.nt-blocked');
-        if (sc) sc.textContent = st.scanned;
-        if (bl) bl.textContent = st.blocked;
-    }
+    const targets = container ? [container] : document.querySelectorAll('.newtab-page');
+    targets.forEach(c => {
+        const sc = c.querySelector('.nt-scanned');
+        const bl = c.querySelector('.nt-blocked');
+        if (sc) animateCounter(sc, st.scanned);
+        if (bl) animateCounter(bl, st.blocked);
+    });
 }
 
 function syncEngineSelectors() {
@@ -219,10 +367,11 @@ function setActiveTab(tabId) {
     tabs.forEach(t => {
         const isActive = t.id === tabId;
         t.tabDiv.classList.toggle('active', isActive);
-        if (t.webview) t.webview.style.display = isActive ? 'flex' : 'none';
-        if (t.page)    t.page.style.display    = isActive ? 'flex' : 'none';
+        if (t.webview) t.webview.style.display = isActive ? 'flex'   : 'none';
+        if (t.page)    t.page.style.display    = isActive ? 'flex'   : 'none';
         if (isActive) {
             urlInput.value = t.url && t.url !== 'about:blank' ? t.url : '';
+            addrClear.style.display = urlInput.value ? 'flex' : 'none';
             activeTabId = tabId;
         }
     });
@@ -231,19 +380,25 @@ function setActiveTab(tabId) {
     removeOverlays();
 }
 
-function getActiveTab()    { return tabs.find(t => t.id === activeTabId); }
-function getActiveWebview(){ return getActiveTab()?.webview; }
+function getActiveTab()     { return tabs.find(t => t.id === activeTabId); }
+function getActiveWebview() { return getActiveTab()?.webview; }
 
 function closeTab(tabId) {
     const index = tabs.findIndex(t => t.id === tabId);
     if (index === -1) return;
     const tab = tabs[index];
-    tab.tabDiv.remove();
-    if (tab.webview) tab.webview.remove();
-    if (tab.page)    tab.page.remove();
-    tabs.splice(index, 1);
-    if (!tabs.length) { createTab(); return; }
-    if (activeTabId === tabId) setActiveTab(tabs[Math.max(0, index - 1)].id);
+    // Slide out animation
+    tab.tabDiv.style.transform = 'scale(0.8)';
+    tab.tabDiv.style.opacity   = '0';
+    tab.tabDiv.style.transition = 'transform 0.15s, opacity 0.15s';
+    setTimeout(() => {
+        tab.tabDiv.remove();
+        if (tab.webview) tab.webview.remove();
+        if (tab.page)    tab.page.remove();
+        tabs.splice(index, 1);
+        if (!tabs.length) { createTab(); return; }
+        if (activeTabId === tabId) setActiveTab(tabs[Math.max(0, index - 1)].id);
+    }, 150);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -254,20 +409,19 @@ async function navigateTo(rawUrl, tabId) {
     if (!url) return;
 
     urlInput.value = url;
+    addrClear.style.display = 'flex';
     showScanning();
     removeOverlays();
+    startNavProgress();
 
     const tab = tabs.find(t => t.id === tabId);
-    if (!tab) { hideScanning(); return; }
+    if (!tab) { hideScanning(); finishNavProgress(); return; }
 
-    // Dismiss new tab page
     if (tab.page) {
         tab.page.style.display = 'none';
         tab.page.remove();
         tab.page = null;
     }
-
-    // Ensure webview exists
     if (!tab.webview) {
         const wv = createWebview(tabId);
         browserArea.appendChild(wv);
@@ -275,7 +429,6 @@ async function navigateTo(rawUrl, tabId) {
     }
     if (activeTabId === tabId) tab.webview.style.display = 'flex';
 
-    // Security scan
     let result;
     try {
         result = await window.trustflow.scanUrl(url);
@@ -284,6 +437,7 @@ async function navigateTo(rawUrl, tabId) {
     }
 
     hideScanning();
+    finishNavProgress();
     updateShield(result);
     refreshStats();
 
@@ -291,14 +445,17 @@ async function navigateTo(rawUrl, tabId) {
         tab.webview.style.display = 'none';
         lockKeyboard(result);
         showBlockPage(result, url, tabId);
+        showToast('Phishing site blocked!', 'danger');
     } else if (result.verdict === 'suspicious') {
         tab.webview.style.display = 'none';
         lockKeyboard(result);
         showWarningOverlay(result, url, tabId);
+        showToast('Suspicious site detected', 'warn');
     } else {
         unlockKeyboard();
         tab.webview.src = url;
         tab.url = url;
+        if (result.score >= 80) showToast(`Site verified safe (${result.score}/100)`, 'safe', 2000);
     }
 }
 
@@ -309,30 +466,75 @@ function showScanning() {
     if (scanSpinner) scanSpinner.style.display = 'block';
     if (shieldIcon)  shieldIcon.className = 'fa-solid fa-shield-halved shield-scanning';
     if (shieldLabel) shieldLabel.textContent = 'Scanning…';
+    if (shieldRing)  { shieldRing.style.color = 'var(--accent-light)'; shieldRing.classList.add('active'); }
 }
 function hideScanning() {
     if (scanSpinner) scanSpinner.style.display = 'none';
+    if (shieldRing)  shieldRing.classList.remove('active');
 }
+
 function updateShield(result) {
     if (!shieldIcon || !shieldLabel) return;
     const { score, verdict, details } = result;
     shieldIcon.className = 'fa-solid fa-shield-halved';
-    if (verdict === 'safe')       { shieldIcon.classList.add('shield-safe');   shieldLabel.textContent = `Safe (${score})`; }
-    else if (verdict === 'suspicious') { shieldIcon.classList.add('shield-warn');   shieldLabel.textContent = `Warning (${score})`; }
-    else                          { shieldIcon.classList.add('shield-danger'); shieldLabel.textContent = `Blocked (${score})`; }
+    shieldIcon.style.transform = 'scale(1.2)';
+    setTimeout(() => { shieldIcon.style.transform = ''; }, 250);
 
-    if (shieldTooltip) {
+    if (verdict === 'safe') {
+        shieldIcon.classList.add('shield-safe');
+        shieldLabel.textContent = `Safe · ${score}`;
+        if (shieldRing) shieldRing.style.color = 'var(--safe)';
+    } else if (verdict === 'suspicious') {
+        shieldIcon.classList.add('shield-warn');
+        shieldLabel.textContent = `Warning · ${score}`;
+        if (shieldRing) shieldRing.style.color = 'var(--warn)';
+    } else {
+        shieldIcon.classList.add('shield-danger');
+        shieldLabel.textContent = `Blocked · ${score}`;
+        if (shieldRing) shieldRing.style.color = 'var(--danger)';
+    }
+    if (shieldRing) shieldRing.classList.add('active');
+
+    if (shieldTooltip && details) {
+        const rows = [
+            { label: 'Trust Score',   val: score,              pct: score },
+            { label: 'ML Classifier', val: details.ml,         pct: details.ml },
+            { label: 'VirusTotal',    val: details.virustotal, pct: details.virustotal },
+            { label: 'Domain Intel',  val: details.whois,      pct: details.whois },
+        ];
+        const color = verdict === 'safe' ? 'var(--safe)' : verdict === 'suspicious' ? 'var(--warn)' : 'var(--danger)';
         shieldTooltip.innerHTML = `
-            <b>${details.domain}</b><br>
-            Trust Score: <b>${score}/100</b><br>
-            ML Classifier: ${details.ml}/100<br>
-            VirusTotal: ${details.virustotal}/100<br>
-            Domain Intelligence: ${details.whois}/100`;
+            <b>${details.domain || 'Unknown domain'}</b><br><br>
+            ${rows.map(r => `
+                <div class="tt-row">
+                    <span style="width:100px;font-size:10px;color:var(--text-muted)">${r.label}</span>
+                    <div class="tt-bar"><div class="tt-fill" style="width:${r.pct}%;background:${color};"></div></div>
+                    <span style="font-size:11px;font-weight:600;width:28px;text-align:right">${r.val}</span>
+                </div>`).join('')}`;
     }
 }
+
 function resetShield() {
     if (shieldIcon)  shieldIcon.className = 'fa-solid fa-shield-halved shield-neutral';
     if (shieldLabel) shieldLabel.textContent = '';
+    if (shieldRing)  shieldRing.classList.remove('active');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Score bar helper for overlays
+// ─────────────────────────────────────────────────────────────────────────────
+function scoreBar(label, val, invert = false) {
+    const pct   = invert ? 100 - val : val;
+    const cls   = pct >= 65 ? 'good' : pct >= 35 ? 'mid' : 'bad';
+    const color = pct >= 65 ? 'var(--safe)' : pct >= 35 ? 'var(--warn)' : 'var(--danger)';
+    return `
+        <div class="score-row">
+            <span class="score-row-label">${label}</span>
+            <div class="score-row-bar">
+                <div class="score-row-fill ${cls}" style="width:${pct}%"></div>
+            </div>
+            <span class="score-row-val" style="color:${color}">${val}</span>
+        </div>`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -347,15 +549,15 @@ function showWarningOverlay(result, url, tabId) {
     const overlay = document.createElement('div');
     overlay.className = 'tf-overlay tf-warning-overlay';
     overlay.innerHTML = `
-        <div class="overlay-card">
+        <div class="overlay-card warn-card">
             <i class="fa-solid fa-triangle-exclamation overlay-icon warn-icon"></i>
             <h2>Suspicious Website Detected</h2>
             <p>This site shows phishing indicators. Keyboard input is restricted to protect your credentials.</p>
             <div class="score-details">
-                <div class="score-item"><span>Trust Score</span><b>${result.score}/100</b></div>
-                <div class="score-item"><span>ML Analysis</span><b>${result.details.ml}/100</b></div>
-                <div class="score-item"><span>VirusTotal</span><b>${result.details.virustotal}/100</b></div>
-                <div class="score-item"><span>Domain Age</span><b>${result.details.whois}/100</b></div>
+                ${scoreBar('Trust Score',   result.score)}
+                ${scoreBar('ML Analysis',   result.details.ml)}
+                ${scoreBar('VirusTotal',    result.details.virustotal)}
+                ${scoreBar('Domain Age',    result.details.whois)}
             </div>
             <p class="domain-label"><i class="fa-solid fa-globe"></i> ${result.details.domain}</p>
             <div class="overlay-actions">
@@ -372,10 +574,10 @@ function showWarningOverlay(result, url, tabId) {
     });
     overlay.querySelector('.btn-proceed').addEventListener('click', () => {
         removeOverlays(); unlockKeyboard();
-        const tab = tabs.find(t => t.id === tabId);
-        if (tab) {
-            if (tab.webview) { tab.webview.style.display = 'flex'; tab.webview.src = url; }
-            tab.url = url;
+        const t = tabs.find(t => t.id === tabId);
+        if (t) {
+            if (t.webview) { t.webview.style.display = 'flex'; t.webview.src = url; }
+            t.url = url;
         }
     });
 }
@@ -388,12 +590,12 @@ function showBlockPage(result, url, tabId) {
         <div class="overlay-card danger-card">
             <i class="fa-solid fa-shield-virus overlay-icon danger-icon"></i>
             <h2>Phishing Attack Blocked</h2>
-            <p>Trust-Flow identified this website as malicious. Navigation has been blocked.</p>
+            <p>Trust-Flow identified this website as malicious. Navigation has been blocked to protect you.</p>
             <div class="score-details">
-                <div class="score-item bad"><span>Trust Score</span><b>${result.score}/100</b></div>
-                <div class="score-item bad"><span>ML Confidence</span><b>${100 - result.details.ml}% phishing</b></div>
-                <div class="score-item bad"><span>VirusTotal</span><b>${result.details.virustotal}/100</b></div>
-                <div class="score-item bad"><span>Domain Intelligence</span><b>${result.details.whois}/100</b></div>
+                ${scoreBar('Trust Score',     result.score)}
+                ${scoreBar('ML Confidence',   result.details.ml, true)}
+                ${scoreBar('VirusTotal',      result.details.virustotal)}
+                ${scoreBar('Domain Intel',    result.details.whois)}
             </div>
             <p class="domain-label danger-label"><i class="fa-solid fa-skull-crossbones"></i> ${result.details.domain}</p>
             <p class="blocked-url">${url.slice(0, 90)}${url.length > 90 ? '…' : ''}</p>
@@ -405,8 +607,8 @@ function showBlockPage(result, url, tabId) {
 
     overlay.querySelector('.btn-back-danger').addEventListener('click', () => {
         removeOverlays(); unlockKeyboard(); resetShield();
-        const tab = tabs.find(t => t.id === tabId);
-        if (tab && tab.webview) tab.webview.style.display = 'flex';
+        const t = tabs.find(t => t.id === tabId);
+        if (t?.webview) t.webview.style.display = 'flex';
         const w = getActiveWebview();
         if (w && w.canGoBack()) w.goBack(); else createTab();
     });
@@ -416,9 +618,8 @@ function showBlockPage(result, url, tabId) {
 // Keyboard Lock
 // ─────────────────────────────────────────────────────────────────────────────
 function lockKeyboard(result) {
-    keyboardLocked = true;
+    keyboardLocked    = true;
     urlInput.disabled = true;
-    urlInput.style.opacity = '0.4';
     const wv = getActiveWebview();
     if (wv) {
         wv.executeJavaScript(`
@@ -442,9 +643,8 @@ function lockKeyboard(result) {
 }
 
 function unlockKeyboard() {
-    keyboardLocked = false;
+    keyboardLocked    = false;
     urlInput.disabled = false;
-    urlInput.style.opacity = '';
     const wv = getActiveWebview();
     if (wv) {
         wv.executeJavaScript(`
@@ -474,7 +674,7 @@ forwardBtn.addEventListener('click', () => {
 reloadBtn.addEventListener('click', () => {
     const w = getActiveWebview();
     if (w) {
-        if (reloadBtn.innerHTML.includes('xmark')) { w.stop(); }
+        if (reloadBtn.innerHTML.includes('xmark')) { w.stop(); finishNavProgress(); }
         else { removeOverlays(); unlockKeyboard(); resetShield(); w.reload(); }
     }
 });
@@ -482,41 +682,55 @@ goBtn.addEventListener('click', () => navigateTo(urlInput.value, activeTabId));
 urlInput.addEventListener('keydown', e => { if (e.key === 'Enter') goBtn.click(); });
 newTabBtn.addEventListener('click', () => createTab());
 
-// Address bar engine selector
-document.getElementById('engine-select').addEventListener('change', (e) => {
+document.getElementById('engine-select').addEventListener('change', e => {
     searchEngine = e.target.value;
     localStorage.setItem('searchEngine', searchEngine);
     syncEngineSelectors();
+    syncEngineRadios();
 });
 
 bookmarkBtn.addEventListener('click', () => {
     const tab = getActiveTab();
     if (!tab || !tab.url || tab.url === 'about:blank') return;
     let bm = JSON.parse(localStorage.getItem('bookmarks') || '[]');
-    if (!bm.includes(tab.url)) { bm.push(tab.url); localStorage.setItem('bookmarks', JSON.stringify(bm)); }
-    bookmarkBtn.querySelector('i').style.color = '#facc15';
-    setTimeout(() => { bookmarkBtn.querySelector('i').style.color = ''; }, 1500);
+    const already = bm.includes(tab.url);
+    if (!already) { bm.push(tab.url); localStorage.setItem('bookmarks', JSON.stringify(bm)); }
+    const icon = bookmarkBtn.querySelector('i');
+    icon.className = 'fa-solid fa-star';
+    icon.style.color = '#facc15';
+    showToast(already ? 'Already bookmarked' : 'Bookmark added', 'info', 1800);
+    setTimeout(() => { icon.className = 'fa-regular fa-star'; icon.style.color = ''; }, 1800);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Settings Panel
 // ─────────────────────────────────────────────────────────────────────────────
+function openSettings() {
+    settingsPanel.classList.add('open');
+    panelBackdrop.classList.add('visible');
+}
+function closeSettings() {
+    settingsPanel.classList.remove('open');
+    panelBackdrop.classList.remove('visible');
+}
+
 async function loadSettings() {
     if (!window.trustflow) return;
     settings = await window.trustflow.getSettings().catch(() => ({}));
-    document.getElementById('vt-key').value             = settings.vtApiKey || '';
-    document.getElementById('toggle-ml').checked        = settings.mlEnabled !== false;
-    document.getElementById('toggle-whois').checked     = settings.whoisEnabled !== false;
-    document.getElementById('toggle-badge').checked     = settings.badgeVisible !== false;
-    const engSel = document.getElementById('settings-engine');
-    if (engSel) engSel.value = searchEngine;
+    document.getElementById('vt-key').value         = settings.vtApiKey || '';
+    document.getElementById('toggle-ml').checked    = settings.mlEnabled   !== false;
+    document.getElementById('toggle-whois').checked = settings.whoisEnabled !== false;
+    document.getElementById('toggle-badge').checked = settings.badgeVisible  !== false;
+    syncEngineRadios();
 }
 
 settingsBtn.addEventListener('click', async () => {
-    settingsPanel.classList.toggle('open');
-    if (settingsPanel.classList.contains('open')) await loadSettings();
+    if (settingsPanel.classList.contains('open')) { closeSettings(); return; }
+    openSettings();
+    await loadSettings();
 });
-closePanelBtn.addEventListener('click', () => settingsPanel.classList.remove('open'));
+closePanelBtn.addEventListener('click', closeSettings);
+panelBackdrop.addEventListener('click', closeSettings);
 
 document.getElementById('save-settings').addEventListener('click', async () => {
     const newSettings = {
@@ -525,32 +739,35 @@ document.getElementById('save-settings').addEventListener('click', async () => {
         whoisEnabled: document.getElementById('toggle-whois').checked,
         badgeVisible: document.getElementById('toggle-badge').checked,
     };
-    const eng = document.getElementById('settings-engine');
-    if (eng) { searchEngine = eng.value; localStorage.setItem('searchEngine', searchEngine); syncEngineSelectors(); }
-    await window.trustflow.saveSettings(newSettings).catch(() => {});
+    const selected = document.querySelector('input[name="settings-engine"]:checked');
+    if (selected) { searchEngine = selected.value; localStorage.setItem('searchEngine', searchEngine); syncEngineSelectors(); }
+    await window.trustflow?.saveSettings(newSettings).catch(() => {});
     settings = newSettings;
-    settingsPanel.classList.remove('open');
+    closeSettings();
+    showToast('Settings saved', 'safe', 2000);
 });
 
 document.getElementById('clear-cache').addEventListener('click', async () => {
-    await window.trustflow.clearCache().catch(() => {});
-    const btn = document.getElementById('clear-cache');
-    btn.textContent = 'Cleared!';
-    setTimeout(() => { btn.textContent = 'Clear Scan Cache'; }, 1500);
+    await window.trustflow?.clearCache().catch(() => {});
+    showToast('Scan cache cleared', 'info', 2000);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Init
 // ─────────────────────────────────────────────────────────────────────────────
 (async function init() {
+    runSplash();
+
     searchEngine = localStorage.getItem('searchEngine') || 'google';
     document.getElementById('engine-select').value = searchEngine;
+    syncEngineRadios();
 
     if (window.trustflow) {
         settings = await window.trustflow.getSettings().catch(() => ({}));
-        window.trustflow.onKeyboardLock(() => {});
-        window.trustflow.onKeyboardUnlock(() => {});
+        window.trustflow.onKeyboardLock?.(() => {});
+        window.trustflow.onKeyboardUnlock?.(() => {});
     }
+
     createTab();
     setInterval(() => refreshStats(), 15000);
 })();

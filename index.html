@@ -6,103 +6,192 @@
 <meta http-equiv="Content-Security-Policy" content="
     default-src 'self';
     script-src 'self' 'unsafe-inline';
-    style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com;
+    style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com;
     img-src 'self' data: https: blob:;
-    font-src 'self' https://cdnjs.cloudflare.com;
+    font-src 'self' https://cdnjs.cloudflare.com https://fonts.gstatic.com;
     connect-src 'self' https:;
 ">
-<link rel="stylesheet" href="./src/index.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<link rel="stylesheet" href="./src/index.css">
 </head>
 <body>
 
-<!-- ── Tabs ── -->
-<div class="tabs">
-    <div class="new-tab" title="New Tab"><i class="fa-solid fa-plus"></i></div>
+<!-- ── Page Load Splash ── -->
+<div class="splash" id="splash">
+    <div class="splash-inner">
+        <img src="Images/Trust-Flow-logo.png" class="splash-logo" alt="Trust-Flow">
+        <div class="splash-name">Trust<span>Flow</span></div>
+        <div class="splash-bar"><div class="splash-fill" id="splash-fill"></div></div>
+        <p class="splash-status" id="splash-status">Initialising security engine…</p>
+    </div>
+</div>
+
+<!-- ── Navigation Progress Bar ── -->
+<div class="nav-progress" id="nav-progress">
+    <div class="nav-progress-fill" id="nav-progress-fill"></div>
+</div>
+
+<!-- ── Toast Container ── -->
+<div class="toast-container" id="toast-container"></div>
+
+<!-- ── Tab Bar ── -->
+<div class="tabs" id="tabs">
+    <div class="new-tab" id="new-tab-btn" title="New Tab">
+        <i class="fa-solid fa-plus"></i>
+    </div>
 </div>
 
 <!-- ── Navbar ── -->
-<div class="navbar">
+<div class="navbar" id="navbar">
     <img src="Images/Trust-Flow-logo.png" class="navbar-logo" alt="Trust-Flow">
+
     <div class="nav-left">
-        <button id="back"    title="Back"><i class="fa-solid fa-arrow-left"></i></button>
-        <button id="forward" title="Forward"><i class="fa-solid fa-arrow-right"></i></button>
-        <button id="reload"  title="Reload"><i class="fa-solid fa-rotate-right"></i></button>
+        <button id="back"    title="Back"    class="nav-btn"><i class="fa-solid fa-arrow-left"></i></button>
+        <button id="forward" title="Forward" class="nav-btn"><i class="fa-solid fa-arrow-right"></i></button>
+        <button id="reload"  title="Reload"  class="nav-btn"><i class="fa-solid fa-rotate-right"></i></button>
     </div>
 
-    <div class="address-bar">
-        <!-- Shield badge -->
+    <div class="address-bar" id="address-bar">
         <div class="shield-badge" id="shield-badge">
+            <div class="shield-ring" id="shield-ring"></div>
             <div class="shield-spinner" id="scan-spinner" style="display:none;"></div>
             <i class="fa-solid fa-shield-halved shield-neutral" id="shield-icon"></i>
             <span id="shield-label"></span>
             <div class="shield-tooltip" id="shield-tooltip"></div>
         </div>
 
-        <!-- Search engine selector -->
+        <div class="addr-sep"></div>
+
         <select id="engine-select" class="engine-select" title="Search engine">
-            <option value="google">G</option>
-            <option value="duckduckgo">DDG</option>
-            <option value="bing">Bing</option>
-        </select>
-
-        <input id="url" type="text" placeholder="Search or enter address…" autocomplete="off" spellcheck="false">
-    </div>
-
-    <div class="nav-right">
-        <button id="go"       title="Go"><i class="fa-solid fa-magnifying-glass"></i></button>
-        <button id="bookmark" title="Bookmark"><i class="fa-solid fa-star"></i></button>
-        <button id="settings" title="Settings"><i class="fa-solid fa-gear"></i></button>
-    </div>
-</div>
-
-<!-- ── Browser Area ── -->
-<div class="browser"></div>
-
-<!-- ── Settings Panel ── -->
-<div class="settings-panel" id="settings-panel">
-    <div class="panel-header">
-        <h2><i class="fa-solid fa-shield-halved"></i> Trust-Flow Settings</h2>
-        <button id="close-panel"><i class="fa-solid fa-xmark"></i></button>
-    </div>
-
-    <div class="panel-section">
-        <label class="panel-label">Default Search Engine</label>
-        <select id="settings-engine" class="panel-input engine-select" style="cursor:pointer;">
             <option value="google">Google</option>
             <option value="duckduckgo">DuckDuckGo</option>
             <option value="bing">Bing</option>
         </select>
+
+        <input id="url" type="text" placeholder="Search or enter address…" autocomplete="off" spellcheck="false">
+
+        <button class="addr-clear-btn" id="addr-clear" title="Clear" style="display:none;">
+            <i class="fa-solid fa-xmark"></i>
+        </button>
     </div>
 
-    <div class="panel-section">
-        <label class="panel-label">VirusTotal API Key</label>
-        <input type="password" id="vt-key" placeholder="Paste your VT API key…" class="panel-input">
-        <small>Free key at virustotal.com → My API Key</small>
+    <div class="nav-right">
+        <button id="go"       title="Go"       class="nav-btn nav-btn-go"><i class="fa-solid fa-arrow-right"></i></button>
+        <button id="bookmark" title="Bookmark" class="nav-btn" id="bookmark"><i class="fa-regular fa-star"></i></button>
+        <button id="settings" title="Settings" class="nav-btn"><i class="fa-solid fa-sliders"></i></button>
     </div>
+</div>
 
-    <div class="panel-section">
-        <label class="panel-label">Security Features</label>
-        <div class="toggle-row">
-            <span>ML URL Classifier</span>
-            <label class="toggle"><input type="checkbox" id="toggle-ml" checked><span class="slider"></span></label>
+<!-- ── Browser Area ── -->
+<div class="browser" id="browser"></div>
+
+<!-- ── Settings Panel Backdrop ── -->
+<div class="panel-backdrop" id="panel-backdrop"></div>
+
+<!-- ── Settings Panel ── -->
+<div class="settings-panel" id="settings-panel">
+    <div class="panel-header">
+        <div class="panel-title">
+            <div class="panel-title-icon"><i class="fa-solid fa-shield-halved"></i></div>
+            <div>
+                <div class="panel-title-text">Trust-Flow</div>
+                <div class="panel-title-sub">Security Settings</div>
+            </div>
         </div>
-        <div class="toggle-row">
-            <span>WHOIS Domain Intelligence</span>
-            <label class="toggle"><input type="checkbox" id="toggle-whois" checked><span class="slider"></span></label>
+        <button id="close-panel" class="panel-close-btn" title="Close">
+            <i class="fa-solid fa-xmark"></i>
+        </button>
+    </div>
+
+    <div class="panel-body">
+        <div class="panel-section">
+            <div class="panel-section-label">
+                <i class="fa-solid fa-magnifying-glass"></i> Search Engine
+            </div>
+            <div class="engine-option-group">
+                <label class="engine-option">
+                    <input type="radio" name="settings-engine" id="settings-engine" value="google" checked>
+                    <span class="engine-option-btn"><i class="fa-brands fa-google"></i> Google</span>
+                </label>
+                <label class="engine-option">
+                    <input type="radio" name="settings-engine" value="duckduckgo">
+                    <span class="engine-option-btn"><i class="fa-solid fa-duck" style="color:#de5833"></i> DuckDuckGo</span>
+                </label>
+                <label class="engine-option">
+                    <input type="radio" name="settings-engine" value="bing">
+                    <span class="engine-option-btn"><i class="fa-brands fa-microsoft"></i> Bing</span>
+                </label>
+            </div>
         </div>
-        <div class="toggle-row">
-            <span>Show Security Badge</span>
-            <label class="toggle"><input type="checkbox" id="toggle-badge" checked><span class="slider"></span></label>
+
+        <div class="panel-section">
+            <div class="panel-section-label">
+                <i class="fa-solid fa-key"></i> VirusTotal API Key
+            </div>
+            <div class="input-group">
+                <input type="password" id="vt-key" placeholder="Paste your VT API key…" class="panel-input" autocomplete="off">
+                <button class="input-reveal-btn" id="vt-reveal" title="Show/hide key">
+                    <i class="fa-regular fa-eye"></i>
+                </button>
+            </div>
+            <a class="panel-hint-link" href="#" onclick="return false;">
+                <i class="fa-solid fa-arrow-up-right-from-square"></i> Get a free key at virustotal.com
+            </a>
+        </div>
+
+        <div class="panel-section">
+            <div class="panel-section-label">
+                <i class="fa-solid fa-shield-halved"></i> Security Features
+            </div>
+            <div class="toggle-row">
+                <div class="toggle-info">
+                    <i class="fa-solid fa-brain toggle-icon"></i>
+                    <div>
+                        <div class="toggle-name">ML URL Classifier</div>
+                        <div class="toggle-desc">AI-powered phishing detection</div>
+                    </div>
+                </div>
+                <label class="toggle"><input type="checkbox" id="toggle-ml" checked><span class="slider"></span></label>
+            </div>
+            <div class="toggle-row">
+                <div class="toggle-info">
+                    <i class="fa-solid fa-globe toggle-icon"></i>
+                    <div>
+                        <div class="toggle-name">WHOIS Intelligence</div>
+                        <div class="toggle-desc">Domain age & registration data</div>
+                    </div>
+                </div>
+                <label class="toggle"><input type="checkbox" id="toggle-whois" checked><span class="slider"></span></label>
+            </div>
+            <div class="toggle-row">
+                <div class="toggle-info">
+                    <i class="fa-solid fa-eye toggle-icon"></i>
+                    <div>
+                        <div class="toggle-name">Security Badge</div>
+                        <div class="toggle-desc">Show trust score in address bar</div>
+                    </div>
+                </div>
+                <label class="toggle"><input type="checkbox" id="toggle-badge" checked><span class="slider"></span></label>
+            </div>
+        </div>
+
+        <div class="panel-section">
+            <div class="panel-section-label">
+                <i class="fa-solid fa-database"></i> Cache
+            </div>
+            <button class="btn-panel-secondary" id="clear-cache">
+                <i class="fa-solid fa-trash-can"></i> Clear Scan Cache
+            </button>
         </div>
     </div>
 
-    <div class="panel-section">
-        <label class="panel-label">Cache</label>
-        <button class="btn-panel-secondary" id="clear-cache">Clear Scan Cache</button>
+    <div class="panel-footer">
+        <button class="btn-panel-primary" id="save-settings">
+            <i class="fa-solid fa-floppy-disk"></i> Save Settings
+        </button>
     </div>
-
-    <button class="btn-panel-primary" id="save-settings">Save Settings</button>
 </div>
 
 <script type="module" src="./src/renderer.js"></script>
