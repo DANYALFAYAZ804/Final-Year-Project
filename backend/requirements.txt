@@ -7,3 +7,6 @@ pandas>=2.2.0
 requests>=2.31.0
 redis>=5.0.0
 gunicorn>=21.2.0
+xgboost>=2.0.0
+imbalanced-learn>=0.12.0
+optuna>=3.6.0
