@@ -274,14 +274,18 @@ body {
 
 .navbar-logo {
     -webkit-app-region:no-drag;
-    width:24px; height:24px; object-fit:contain; flex-shrink:0;
-    filter:brightness(0) invert(1) drop-shadow(0 0 6px rgba(96,165,250,0.75));
-    margin-right:2px;
+    width:38px; height:38px; object-fit:contain; flex-shrink:0;
+    filter:brightness(0) invert(1)
+           drop-shadow(0 0 8px rgba(96,165,250,0.9))
+           drop-shadow(0 0 3px rgba(255,255,255,0.4));
+    margin-right:4px;
     transition:filter var(--dur-mid), transform var(--dur-mid);
 }
 .navbar-logo:hover {
-    filter:brightness(0) invert(1) drop-shadow(0 0 12px rgba(96,165,250,1));
-    transform:scale(1.08);
+    filter:brightness(0) invert(1)
+           drop-shadow(0 0 16px rgba(96,165,250,1))
+           drop-shadow(0 0 6px rgba(255,255,255,0.5));
+    transform:scale(1.1);
 }
 
 .nav-left, .nav-right { -webkit-app-region:no-drag; display:flex; gap:1px; }
