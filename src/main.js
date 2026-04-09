@@ -10,6 +10,51 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // ──────────────────────────────────────────────
+// Whitelist of known authentic domains
+// ──────────────────────────────────────────────
+const WHITELIST_DOMAINS = new Set([
+    'google.com','youtube.com','facebook.com','wikipedia.org','twitter.com',
+    'instagram.com','linkedin.com','reddit.com','amazon.com','yahoo.com',
+    'microsoft.com','apple.com','netflix.com','github.com','stackoverflow.com',
+    'twitch.tv','pinterest.com','tumblr.com','wordpress.com','blogspot.com',
+    'bbc.com','bbc.co.uk','cnn.com','nytimes.com','theguardian.com',
+    'reuters.com','forbes.com','bloomberg.com','wsj.com','techcrunch.com',
+    'wired.com','medium.com','quora.com','discord.com','slack.com',
+    'zoom.us','dropbox.com','notion.so','trello.com','asana.com',
+    'spotify.com','soundcloud.com','hulu.com','disneyplus.com',
+    'paypal.com','stripe.com','ebay.com','etsy.com','shopify.com',
+    'adobe.com','salesforce.com','oracle.com','ibm.com','cisco.com',
+    'cloudflare.com','godaddy.com','namecheap.com','digitalocean.com',
+    'heroku.com','vercel.com','netlify.com',
+    'npmjs.com','pypi.org','huggingface.co','kaggle.com',
+    'arxiv.org','python.org','nodejs.org',
+    'reactjs.org','vuejs.org','angular.io','tailwindcss.com',
+    'docker.com','kubernetes.io','w3schools.com','developer.mozilla.org',
+    'fonts.google.com','unsplash.com','imdb.com','steampowered.com',
+    'epicgames.com','xbox.com','nintendo.com','playstation.com',
+    'wolframalpha.com','mathworks.com','tableau.com','aws.amazon.com',
+    'cloud.google.com','azure.microsoft.com','firebase.google.com',
+    'scholar.google.com','maps.google.com','drive.google.com',
+]);
+
+const SUSPICIOUS_PATH_WORDS = ['login','signin','verify','account','password','banking','payment'];
+
+function isWhitelisted(url) {
+    try {
+        const parsed = new URL(url);
+        const hostname = parsed.hostname.toLowerCase().replace(/^www\./, '');
+        const path = parsed.pathname.toLowerCase();
+        const parts = hostname.split('.');
+        const base = parts.length >= 2 ? parts.slice(-2).join('.') : hostname;
+        if (!WHITELIST_DOMAINS.has(hostname) && !WHITELIST_DOMAINS.has(base)) return false;
+        if (SUSPICIOUS_PATH_WORDS.some(w => path.includes(w))) return false;
+        return true;
+    } catch (_) {
+        return false;
+    }
+}
+
+// ──────────────────────────────────────────────
 // Stats tracking
 // ──────────────────────────────────────────────
 let statsScanned = 0;
@@ -213,6 +258,14 @@ async function scoreVirusTotal(url) {
 // Trust Score Engine
 // ──────────────────────────────────────────────
 async function computeTrustScore(url, settings) {
+    if (isWhitelisted(url)) {
+        return {
+            score: 100,
+            verdict: 'safe',
+            details: { ml: 100, whois: 100, virustotal: 100, domain: extractDomain(url) },
+        };
+    }
+
     const [mlScore, whoisScore, vtScore] = await Promise.all([
         settings.mlEnabled !== false ? scoreML(url) : Promise.resolve(0.5),
         settings.whoisEnabled !== false ? scoreWHOIS(url) : Promise.resolve(0.5),
