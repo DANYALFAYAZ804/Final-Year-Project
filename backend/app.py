@@ -1,69 +1,19 @@
 """
-Trust-Flow Backend — Flask REST API with Redis Caching
-Full backend: ML prediction, WHOIS intelligence, health, cache management.
+Trust-Flow Backend — Flask REST API
+ML prediction with whitelist fast-pass and heuristic fallback.
 """
 
 import re
 import math
 import os
-import json
-import hashlib
 import joblib
 import numpy as np
-import redis
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from urllib.parse import urlparse
 
 app = Flask(__name__)
 CORS(app)
-
-# ─────────────────────────────────────────────
-# Redis
-# ─────────────────────────────────────────────
-REDIS_HOST     = os.environ.get('REDIS_HOST', 'localhost')
-REDIS_PORT     = int(os.environ.get('REDIS_PORT', 6379))
-REDIS_PASSWORD = os.environ.get('REDIS_PASSWORD', None)
-CACHE_TTL      = int(os.environ.get('CACHE_TTL_SECONDS', 3600))
-
-_redis = None
-
-def get_redis():
-    global _redis
-    if _redis is None:
-        try:
-            client = redis.Redis(
-                host=REDIS_HOST, port=REDIS_PORT, password=REDIS_PASSWORD,
-                decode_responses=True, socket_connect_timeout=2, socket_timeout=2,
-            )
-            client.ping()
-            _redis = client
-            print(f"[Redis] Connected at {REDIS_HOST}:{REDIS_PORT}")
-        except Exception as e:
-            print(f"[Redis] Unavailable ({e}) — running without cache")
-    return _redis
-
-def cache_key(url):
-    return "tf:pred:" + hashlib.sha256(url.encode()).hexdigest()
-
-def cache_get(url):
-    r = get_redis()
-    if not r:
-        return None
-    try:
-        raw = r.get(cache_key(url))
-        return json.loads(raw) if raw else None
-    except Exception:
-        return None
-
-def cache_set(url, result):
-    r = get_redis()
-    if not r:
-        return
-    try:
-        r.setex(cache_key(url), CACHE_TTL, json.dumps(result))
-    except Exception:
-        pass
 
 # ─────────────────────────────────────────────
 # Feature extraction — 45 features (v4.0, matches train.py)
@@ -322,17 +272,10 @@ def heuristic_score(url):
 # ─────────────────────────────────────────────
 @app.route('/health', methods=['GET'])
 def health():
-    r = get_redis()
-    redis_ok = False
-    if r:
-        try: r.ping(); redis_ok = True
-        except Exception: pass
     return jsonify({
         'status': 'ok',
         'model_loaded': model_data is not None,
         'model_version': model_data.get('version', 'unknown') if isinstance(model_data, dict) else 'legacy',
-        'redis_connected': redis_ok,
-        'cache_ttl_seconds': CACHE_TTL,
     })
 
 @app.route('/predict', methods=['POST'])
@@ -350,23 +293,15 @@ def predict():
     # (only applies when the Electron layer explicitly sets the flag to False/0)
     behavioral_scan = has_password_field or data.get('force_scan', False)
 
-    cached = cache_get(url)
-    if cached:
-        cached['cached'] = True
-        return jsonify(cached)
-
     # ── Whitelist fast-pass ──
     if is_whitelisted(url) and not behavioral_scan:
-        result = {
+        return jsonify({
             'score':               1.0,
             'label':               'safe',
             'confidence':          1.0,
             'phishing_probability': 0.0,
             'whitelist':           True,
-            'cached':              False,
-        }
-        cache_set(url, result)
-        return jsonify(result)
+        })
 
     try:
         if model_data is not None:
@@ -384,7 +319,6 @@ def predict():
                 'confidence':          round(float(max(proba)), 4),
                 'phishing_probability': round(phishing_prob, 4),
                 'whitelist':           False,
-                'cached':              False,
             }
         else:
             risk = heuristic_score(url)
@@ -395,47 +329,15 @@ def predict():
                 'phishing_probability': round(risk, 4),
                 'fallback':            True,
                 'whitelist':           False,
-                'cached':              False,
             }
 
-        cache_set(url, result)
         return jsonify(result)
 
     except Exception as e:
-        return jsonify({'score': 0.5, 'label': 'unknown', 'error': str(e), 'cached': False}), 200
-
-@app.route('/cache/flush', methods=['POST'])
-def flush_cache():
-    r = get_redis()
-    if not r:
-        return jsonify({'error': 'Redis not connected'}), 503
-    try:
-        keys = r.keys('tf:pred:*')
-        if keys:
-            r.delete(*keys)
-        return jsonify({'flushed': len(keys)})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/cache/stats', methods=['GET'])
-def cache_stats():
-    r = get_redis()
-    if not r:
-        return jsonify({'error': 'Redis not connected'}), 503
-    try:
-        info = r.info('memory')
-        keys = r.keys('tf:pred:*')
-        return jsonify({
-            'prediction_keys':   len(keys),
-            'used_memory_human': info.get('used_memory_human'),
-            'maxmemory_human':   info.get('maxmemory_human', 'unlimited'),
-        })
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'score': 0.5, 'label': 'unknown', 'error': str(e)}), 200
 
 if __name__ == '__main__':
     load_model()
-    get_redis()
     port = int(os.environ.get('PORT', 5000))
     print(f"[Trust-Flow Backend] Starting on port {port}")
     app.run(host='0.0.0.0', port=port, debug=False)
