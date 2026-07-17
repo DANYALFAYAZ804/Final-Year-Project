@@ -1,7 +1,6 @@
 import { app, BrowserWindow, ipcMain } from 'electron';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { spawn } from 'child_process';
 import http from 'http';
 import https from 'https';
 import * as configStore from './config-store.js';
@@ -67,55 +66,31 @@ const whoisCache = new Map();
 const WHOIS_TTL_MS = 10 * 60 * 1000;
 
 // ──────────────────────────────────────────────
-// ML service URL (env-configurable for Docker/remote deploy)
-// ML_SERVICE_URL env var overrides the local spawned process.
+// ML service URL — now points at the Railway-hosted backend.
+// Can still be overridden with the ML_SERVICE_URL env var
+// (e.g. for local development against a locally-run backend).
 // ──────────────────────────────────────────────
-const ML_SERVICE_URL = process.env.ML_SERVICE_URL || 'http://127.0.0.1:5000';
-const USE_EXTERNAL_ML = !!process.env.ML_SERVICE_URL;
+const ML_SERVICE_URL = process.env.ML_SERVICE_URL
+    || 'https://final-year-project-production-9edf.up.railway.app';
 
-let mlProcess = null;
 let mlReady = false;
 
 function startMlService() {
-    if (USE_EXTERNAL_ML) {
-        console.log(`[ML] Using external ML service at ${ML_SERVICE_URL}`);
-        probeMLHealth();
-        return;
-    }
-    const mlDir = path.join(app.getAppPath(), 'backend');
-    const scriptPath = path.join(mlDir, 'app.py');
-    mlProcess = spawn('python', [scriptPath], {
-        cwd: mlDir,
-        stdio: ['ignore', 'pipe', 'pipe'],
-        env: { ...process.env },
-    });
-    mlProcess.stdout.on('data', (d) => {
-        const msg = d.toString();
-        if (msg.includes('Running on') || msg.includes('Listening')) mlReady = true;
-        console.log('[ML]', msg.trim());
-    });
-    mlProcess.stderr.on('data', (d) => {
-        const msg = d.toString();
-        if (msg.includes('Listening') || msg.includes('Running on')) mlReady = true;
-        console.error('[ML-err]', msg.trim());
-    });
-    mlProcess.on('close', (code) => {
-        console.log('[ML] process exited with code', code);
-        mlReady = false;
-    });
+    console.log(`[ML] Using remote ML service at ${ML_SERVICE_URL}`);
+    probeMLHealth();
 }
 
 function probeMLHealth(retries = 10, delayMs = 2000) {
     httpGet(`${ML_SERVICE_URL}/health`).then(res => {
         if (res.status === 200) {
             mlReady = true;
-            console.log('[ML] External service healthy:', res.body);
+            console.log('[ML] Remote service healthy:', res.body);
         } else if (retries > 0) {
             setTimeout(() => probeMLHealth(retries - 1, delayMs), delayMs);
         }
     }).catch(() => {
         if (retries > 0) setTimeout(() => probeMLHealth(retries - 1, delayMs), delayMs);
-        else console.error('[ML] External service unreachable after retries.');
+        else console.error('[ML] Remote service unreachable after retries.');
     });
 }
 
@@ -174,12 +149,24 @@ function httpGet(url, headers = {}) {
 }
 
 // ──────────────────────────────────────────────
-// ML Classifier
+// ML Classifier — calls the Railway-hosted /predict endpoint
 // ──────────────────────────────────────────────
+async function checkWebsite(url) {
+    const response = await fetch(`${ML_SERVICE_URL}/predict`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ url }),
+    });
+
+    return await response.json();
+}
+
 async function scoreML(url) {
     if (!mlReady) return 0.5;
     try {
-        const result = await httpPost(`${ML_SERVICE_URL}/predict`, { url });
+        const result = await checkWebsite(url);
         return typeof result.score === 'number' ? result.score : 0.5;
     } catch (_) { return 0.5; }
 }
@@ -377,5 +364,4 @@ app.whenReady().then(() => {
     });
 });
 
-app.on('before-quit', () => { if (mlProcess) mlProcess.kill(); });
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
