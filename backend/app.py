@@ -15,6 +15,15 @@ from urllib.parse import urlparse
 app = Flask(__name__)
 CORS(app)
 
+
+@app.route("/")
+def home():
+    return jsonify({
+        "status": "online",
+        "message": "Trust Flow Backend is Running"
+    })
+
+
 # ─────────────────────────────────────────────
 # Feature extraction — 45 features (v4.0, matches train.py)
 # ─────────────────────────────────────────────
@@ -341,6 +350,6 @@ if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     print(f"[Trust-Flow Backend] Starting on port {port}")
     app.run(
-    host="0.0.0.0",
-    port=int(os.environ.get("PORT", 5000))
-)
+        host="0.0.0.0",
+        port=port
+    )
