@@ -2,6 +2,11 @@
 // Trust-Flow Renderer v3.0 — Dynamic · Animated · Professional
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Vite-managed asset import — resolves correctly in both dev and the
+// packaged build (unlike a raw "Images/..." string path, which 404s once
+// the folder structure changes or the app is packaged).
+import logoUrl from './assets/Trust-Flow-logo.png';
+
 // ──── DOM refs ────
 const tabsContainer = document.getElementById('tabs');
 const newTabBtn     = document.getElementById('new-tab-btn');
@@ -246,7 +251,7 @@ function buildNewTabPage(tabId) {
 
     div.innerHTML = `
         <div class="newtab-inner">
-            <img src="Images/Trust-Flow-logo.png" class="center-logo" alt="Trust-Flow">
+            <img src="${logoUrl}" class="center-logo" alt="Trust-Flow">
             <h1>Trust-Flow</h1>
             <p class="newtab-tagline">Zero-Trust AI Browser</p>
 

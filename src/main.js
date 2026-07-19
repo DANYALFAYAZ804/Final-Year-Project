@@ -296,11 +296,22 @@ function getSettings() {
 // ──────────────────────────────────────────────
 let mainWindow = null;
 
+// Icon lives in src/assets, which Vite doesn't automatically carry into the
+// packaged output. In dev it's read straight from the project's src/ folder;
+// once packaged, forge.config.js's `extraResource: ['src/assets']` copies it
+// into the app's resources folder instead, so we read it from there.
+function getAssetPath(filename) {
+    if (app.isPackaged) {
+        return path.join(process.resourcesPath, 'assets', filename);
+    }
+    return path.join(__dirname, '..', '..', 'src', 'assets', filename);
+}
+
 function createWindow() {
     mainWindow = new BrowserWindow({
         width: 1400,
         height: 900,
-        icon: path.join(app.getAppPath(), 'Images', 'Trust-Flow-logo.png'),
+        icon: getAssetPath('Trust-Flow-logo.png'),
         autoHideMenuBar: true,
         webPreferences: {
             preload: path.join(__dirname, 'preload.js'),
