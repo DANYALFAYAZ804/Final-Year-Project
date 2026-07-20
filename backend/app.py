@@ -258,6 +258,13 @@ def load_model():
     else:
         print("[ML] WARNING: model.pkl not found — run train.py first. Heuristic fallback active.")
 
+# Called at import time (module level), not just inside __main__ — this is
+# required for production WSGI servers like gunicorn, which import this
+# file as a module rather than executing it as a script. The __main__
+# block only runs for `python app.py` (local dev); gunicorn never triggers
+# it, so the model would silently never load in production without this.
+load_model()
+
 # ─────────────────────────────────────────────
 # Heuristic fallback
 # ─────────────────────────────────────────────
@@ -346,7 +353,6 @@ def predict():
         return jsonify({'score': 0.5, 'label': 'unknown', 'error': str(e)}), 200
 
 if __name__ == '__main__':
-    load_model()
     port = int(os.environ.get('PORT', 5000))
     print(f"[Trust-Flow Backend] Starting on port {port}")
     app.run(
