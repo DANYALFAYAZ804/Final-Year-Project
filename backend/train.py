@@ -687,8 +687,17 @@ def build_dataset():
     1. Base URLs + augmentation
     2. Synthetic homograph + Punycode phishing
     3. Deduplicate
-    4. Return feature matrix + labels
+    4. Simulate behavioral signals (has_password_field, external_resource_ratio)
+       so the model can actually learn from them — previously these were
+       left at 0 for every sample, safe and phishing alike, which meant the
+       trained model had zero variance to split on and effectively ignored
+       both features regardless of what real-world values were sent at
+       inference time.
+    5. Return feature matrix + labels
     """
+    import random
+    rng = random.Random(42)  # deterministic, reproducible dataset
+
     safe_urls, phish_urls = [], []
 
     for url in BASE_SAFE:
@@ -709,7 +718,38 @@ def build_dataset():
     all_urls = safe_urls + phish_urls
     labels   = [0] * len(safe_urls) + [1] * len(phish_urls)
 
-    X = np.array([extract_features(u) for u in all_urls])
+    # Simulate has_password_field / external_resource_ratio realistically:
+    # in real traffic these are frequently UNAVAILABLE (fetch blocked,
+    # times out, or the page simply has no form) for both safe and
+    # phishing URLs alike — so the majority of samples in both classes
+    # keep them at the default 0/0, exactly like URL-only inference does.
+    # For the minority that do get a "real" reading, use noisy, overlapping
+    # distributions rather than cleanly separable ranges, so the model
+    # treats this as one weak corroborating signal among many rather than
+    # a shortcut that lets it ignore the URL-structure features (which are
+    # what actually generalize to URLs never seen during training).
+    def simulate_signals(is_phishing: bool):
+        # ~55% of samples in both classes get no behavioral data at all —
+        # this keeps the model's primary reliance on URL structure, since
+        # that's what's available on every single navigation, before any
+        # page fetch happens or succeeds.
+        if rng.random() < 0.55:
+            return 0, 0.0
+
+        if is_phishing:
+            has_pw = 1 if rng.random() < 0.55 else 0
+            ext_ratio = round(min(1.0, max(0.0, rng.gauss(0.55, 0.25))), 2)
+        else:
+            has_pw = 1 if rng.random() < 0.20 else 0
+            ext_ratio = round(min(1.0, max(0.0, rng.gauss(0.20, 0.20))), 2)
+        return has_pw, ext_ratio
+
+    X = []
+    for u, label in zip(all_urls, labels):
+        has_pw, ext_ratio = simulate_signals(is_phishing=(label == 1))
+        X.append(extract_features(u, has_password_field=has_pw, external_resource_ratio=ext_ratio))
+
+    X = np.array(X)
     y = np.array(labels)
     return X, y
 
