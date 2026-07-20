@@ -149,24 +149,109 @@ function httpGet(url, headers = {}) {
 }
 
 // ──────────────────────────────────────────────
+// Page Content Inspection — fetches the page's raw HTML (before it's ever
+// shown in the webview) and checks for phishing-relevant signals that the
+// URL string alone can't reveal: a password field, and how much of the
+// page's resources are loaded from other domains. Both feed the ML
+// backend's has_password_field / external_resource_ratio parameters,
+// which the backend has supported since the start but nothing was ever
+// actually sending.
+// ──────────────────────────────────────────────
+function fetchHtml(url, maxRedirects = 3) {
+    return new Promise((resolve) => {
+        const attempt = (targetUrl, redirectsLeft) => {
+            let parsed;
+            try { parsed = new URL(targetUrl); } catch (_) { return resolve(null); }
+            const lib = parsed.protocol === 'https:' ? https : http;
+            const req = lib.request({
+                hostname: parsed.hostname,
+                port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
+                path: parsed.pathname + (parsed.search || ''),
+                method: 'GET',
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
+                    'Accept': 'text/html,application/xhtml+xml',
+                },
+                timeout: 4000,
+            }, (res) => {
+                if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location && redirectsLeft > 0) {
+                    res.resume();
+                    const nextUrl = new URL(res.headers.location, targetUrl).toString();
+                    attempt(nextUrl, redirectsLeft - 1);
+                    return;
+                }
+                let buf = '';
+                let size = 0;
+                res.setEncoding('utf8');
+                res.on('data', (c) => {
+                    size += Buffer.byteLength(c);
+                    if (size > 1_500_000) { req.destroy(); return; } // cap ~1.5MB, plenty for head+visible markup
+                    buf += c;
+                });
+                res.on('end', () => resolve({ html: buf, finalUrl: targetUrl }));
+            });
+            req.on('error', () => resolve(null));
+            req.on('timeout', () => { req.destroy(); resolve(null); });
+            req.end();
+        };
+        attempt(url, maxRedirects);
+    });
+}
+
+function analyzePageContent(html, pageUrl) {
+    let pageHost = '';
+    try { pageHost = new URL(pageUrl).hostname.replace(/^www\./, ''); } catch (_) {}
+
+    const hasPasswordField = /<input\b[^>]*\btype\s*=\s*["']?password["']?[^>]*>/i.test(html) ? 1 : 0;
+
+    const resourceRegex = /<(?:script|img|iframe)\b[^>]*\bsrc\s*=\s*["']([^"']+)["']|<link\b[^>]*\bhref\s*=\s*["']([^"']+)["']/gi;
+    let match;
+    let total = 0;
+    let external = 0;
+    while ((match = resourceRegex.exec(html)) !== null) {
+        const ref = match[1] || match[2];
+        if (!ref || ref.startsWith('data:') || ref.startsWith('#')) continue;
+        total++;
+        try {
+            const refHost = new URL(ref, pageUrl).hostname.replace(/^www\./, '');
+            if (refHost && refHost !== pageHost) external++;
+        } catch (_) { /* relative or malformed — treat as same-origin, don't count */ }
+    }
+    const externalResourceRatio = total > 0 ? Math.round((external / total) * 100) / 100 : 0;
+
+    return { hasPasswordField, externalResourceRatio };
+}
+
+async function inspectPage(url) {
+    const result = await fetchHtml(url);
+    if (!result || !result.html) return { hasPasswordField: 0, externalResourceRatio: 0 };
+    return analyzePageContent(result.html, result.finalUrl || url);
+}
+
+// ──────────────────────────────────────────────
 // ML Classifier — calls the Railway-hosted /predict endpoint
 // ──────────────────────────────────────────────
-async function checkWebsite(url) {
+async function checkWebsite(url, signals = {}) {
     const response = await fetch(`${ML_SERVICE_URL}/predict`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ url }),
+        body: JSON.stringify({
+            url,
+            has_password_field: signals.hasPasswordField || 0,
+            external_resource_ratio: signals.externalResourceRatio || 0,
+            force_scan: (signals.hasPasswordField || 0) === 1, // ensure backend doesn't skip scoring on a whitelisted-looking domain when a password field is present
+        }),
     });
 
     return await response.json();
 }
 
-async function scoreML(url) {
+async function scoreML(url, signals) {
     if (!mlReady) return 0.5;
     try {
-        const result = await checkWebsite(url);
+        const result = await checkWebsite(url, signals);
         return typeof result.score === 'number' ? result.score : 0.5;
     } catch (_) { return 0.5; }
 }
@@ -245,7 +330,13 @@ async function scoreVirusTotal(url) {
 // Trust Score Engine
 // ──────────────────────────────────────────────
 async function computeTrustScore(url, settings) {
-    if (isWhitelisted(url)) {
+    // Inspect the page's actual HTML first — a password field on an
+    // otherwise-clean-looking domain (e.g. Google's own Safe Browsing test
+    // page, or any compromised/free hosting page) should never get a free
+    // pass just because the domain or URL string looks harmless.
+    const signals = await inspectPage(url).catch(() => ({ hasPasswordField: 0, externalResourceRatio: 0 }));
+
+    if (isWhitelisted(url) && signals.hasPasswordField !== 1) {
         return {
             score: 100,
             verdict: 'safe',
@@ -254,7 +345,7 @@ async function computeTrustScore(url, settings) {
     }
 
     const [mlScore, whoisScore, vtScore] = await Promise.all([
-        settings.mlEnabled !== false ? scoreML(url) : Promise.resolve(0.5),
+        settings.mlEnabled !== false ? scoreML(url, signals) : Promise.resolve(0.5),
         settings.whoisEnabled !== false ? scoreWHOIS(url) : Promise.resolve(0.5),
         scoreVirusTotal(url),
     ]);
