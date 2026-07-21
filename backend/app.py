@@ -6,14 +6,66 @@ ML prediction with whitelist fast-pass and heuristic fallback.
 import re
 import math
 import os
+import time
+import pymysql
+from datetime import datetime
 import joblib
 import numpy as np
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, session
 from flask_cors import CORS
+from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
+from werkzeug.security import generate_password_hash, check_password_hash
+from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 from urllib.parse import urlparse
 
 app = Flask(__name__)
-CORS(app)
+
+# Restrict credentialed cross-origin requests to an explicit allowlist.
+# supports_credentials=True combined with an unrestricted origin lets ANY
+# website's JS make session-cookie-bearing requests against this public
+# API. The Electron client's fetch() calls run in the Node main process
+# (not a browser page), so they never send an Origin header and are
+# unaffected by this — tightening it only closes the gap for third-party
+# browser pages hitting the public backend directly.
+CORS_ALLOWED_ORIGINS = [o.strip() for o in os.environ.get('CORS_ALLOWED_ORIGINS', '').split(',') if o.strip()]
+CORS(app, supports_credentials=True, origins=CORS_ALLOWED_ORIGINS)
+
+# Session-signing key. A hardcoded secret means anyone who reads this file
+# (or the public repo) can forge session cookies. Overridable via env var.
+app.secret_key = os.environ.get('FLASK_SECRET_KEY') or 'dev-only-insecure-secret-key-change-me'
+if not os.environ.get('FLASK_SECRET_KEY'):
+    print("[Auth] WARNING: FLASK_SECRET_KEY not set — using an insecure default. Set it in production.")
+
+# Database URI — defaults to the local XAMPP MySQL install for dev, but is
+# overridable via DATABASE_URL for any deployed environment (e.g. Railway),
+# where 'localhost:3306' never resolves to a real MySQL server.
+_db_url = os.environ.get('DATABASE_URL', 'mysql+pymysql://root:@localhost:3306/trust_flow_db')
+if _db_url.startswith('mysql://'):
+    _db_url = _db_url.replace('mysql://', 'mysql+pymysql://', 1)
+app.config['SQLALCHEMY_DATABASE_URI'] = _db_url
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+db = SQLAlchemy(app)
+
+EMAIL_REGEX = re.compile(r'^[^\s@]+@[^\s@]+\.[^\s@]+$')
+
+# "Stay logged in" session tokens — signed + timestamped via itsdangerous,
+# using the same app.secret_key already required above. No separate
+# sessions table is needed: the token itself carries the user id and an
+# embedded issue time, and itsdangerous's max_age check on .loads()
+# enforces expiry cryptographically (a tampered/forged expiry can't pass
+# signature verification). 30 days chosen per the "Stay logged in" spec.
+SESSION_TOKEN_MAX_AGE_SECONDS = 30 * 24 * 60 * 60  # 30 days
+_session_serializer = URLSafeTimedSerializer(app.secret_key, salt='trustflow-session')
+
+
+def issue_session_token(user_id):
+    """Returns (token, expires_at_ms) — expires_at is in epoch milliseconds
+    so the Electron client can compare it directly against Date.now()."""
+    token = _session_serializer.dumps({'user_id': user_id})
+    expires_at_ms = int((time.time() + SESSION_TOKEN_MAX_AGE_SECONDS) * 1000)
+    return token, expires_at_ms
 
 
 @app.route("/")
@@ -25,9 +77,292 @@ def home():
 
 
 # ─────────────────────────────────────────────
+# DATABASE MODELS — XAMPP MySQL
+# ─────────────────────────────────────────────
+class User(db.Model):
+    __tablename__ = 'users'
+    user_id = db.Column(db.Integer, primary_key=True)
+    full_name = db.Column(db.String(100), nullable=False)
+    email = db.Column(db.String(150), unique=True, nullable=False)
+    password_hash = db.Column(db.String(255), nullable=False)
+    last_login_at = db.Column(db.DateTime)
+
+
+class UserScan(db.Model):
+    __tablename__ = 'user_scans'
+    scan_id = db.Column(db.BigInteger, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.user_id'), nullable=False)
+    scanned_url = db.Column(db.Text, nullable=False)
+    domain = db.Column(db.String(255), nullable=False)
+    verdict = db.Column(db.String(50), nullable=False)
+    threat_score = db.Column(db.Numeric(5, 2), default=0.00)
+
+
+def ensure_database_exists():
+    """A fresh XAMPP MySQL install won't already have 'trust_flow_db', and
+    SQLAlchemy's create_all() only creates tables — not the database itself.
+    Without this, connecting fails with an 'Unknown database' error."""
+    parsed  = urlparse(app.config['SQLALCHEMY_DATABASE_URI'])
+    db_name = parsed.path.lstrip('/')
+    conn = pymysql.connect(
+        host=parsed.hostname or 'localhost',
+        port=parsed.port or 3306,
+        user=parsed.username or 'root',
+        password=parsed.password or '',
+    )
+    try:
+        with conn.cursor() as cur:
+            cur.execute(f"CREATE DATABASE IF NOT EXISTS `{db_name}`")
+        conn.commit()
+    finally:
+        conn.close()
+
+
+# Runs at import time (module level) so both `python app.py` and a
+# production WSGI server (gunicorn) get the database/tables ready before
+# the first request arrives — wrapped so a MySQL/XAMPP outage doesn't take
+# down the ML endpoints, which don't depend on the database.
+try:
+    # ensure_database_exists() speaks raw pymysql — only relevant when the
+    # configured URI is actually MySQL (the local XAMPP default or a real
+    # deployment). Calling it against a non-MySQL DATABASE_URL would just
+    # fail and skip table creation entirely.
+    if _db_url.startswith('mysql'):
+        ensure_database_exists()
+    with app.app_context():
+        db.create_all()
+    print(f"[DB] Connected — tables ready ({_db_url.split('://')[0]}).")
+except Exception as e:
+    print(f"[DB] WARNING: could not initialize the database — {e}")
+
+
+# ─────────────────────────────────────────────
+# AUTHENTICATION ROUTES
+# ─────────────────────────────────────────────
+@app.route('/auth/check-email', methods=['POST'])
+def check_email():
+    """
+    Step 1: Search database for user email.
+    If found -> Allow Login.
+    If not found -> Redirect to Sign Up.
+    """
+    data = request.get_json(force=True) or {}
+    email = data.get('email', '').strip().lower()
+
+    if not email or not EMAIL_REGEX.match(email):
+        return jsonify({"status": "error", "message": "A valid email address is required"}), 400
+
+    # Search database for existing user
+    try:
+        existing_user = User.query.filter_by(email=email).first()
+    except SQLAlchemyError:
+        return jsonify({"status": "error", "message": "Database is temporarily unavailable. Please try again shortly."}), 503
+
+    if existing_user:
+        return jsonify({
+            "status": "user_exists",
+            "action": "login",
+            "message": "Account found! Please enter your password to log in.",
+            "email": email
+        }), 200
+    else:
+        return jsonify({
+            "status": "user_not_found",
+            "action": "signup",
+            "message": "No account found with this email. Please sign up first.",
+            "email": email
+        }), 404
+
+
+@app.route('/auth/login', methods=['POST'])
+def login():
+    """ Step 2A: Direct Login if account exists """
+    data = request.get_json(force=True) or {}
+    email = data.get('email', '').strip().lower()
+    password = data.get('password')
+
+    # Without this, a missing/empty password reaches check_password_hash()
+    # below, which raises a TypeError on a non-string argument — an
+    # unhandled exception (HTML 500) instead of a clean error message.
+    if not email or not password:
+        return jsonify({"status": "error", "message": "Email and password are required"}), 400
+
+    try:
+        user = User.query.filter_by(email=email).first()
+    except SQLAlchemyError:
+        return jsonify({"status": "error", "message": "Database is temporarily unavailable. Please try again shortly."}), 503
+
+    if not user:
+        return jsonify({"status": "error", "message": "No account found. Please sign up."}), 404
+
+    if check_password_hash(user.password_hash, password):
+        # Update last login timestamp
+        try:
+            user.last_login_at = datetime.now()
+            db.session.commit()
+        except SQLAlchemyError:
+            db.session.rollback()
+            # Non-critical — still let the user in even if the timestamp update failed.
+
+        # Save active session
+        session['user_id'] = user.user_id
+        session['user_name'] = user.full_name
+
+        # Always issue a session token — whether the client persists it
+        # locally (for "Stay logged in") is entirely the client's choice;
+        # issuing it unconditionally keeps this endpoint's behavior uniform.
+        session_token, expires_at = issue_session_token(user.user_id)
+
+        return jsonify({
+            "status": "success",
+            "message": f"Welcome back, {user.full_name}!",
+            "user_id": user.user_id,
+            "session_token": session_token,
+            "expires_at": expires_at
+        }), 200
+
+    return jsonify({"status": "error", "message": "Incorrect password. Please try again."}), 401
+
+
+@app.route('/auth/signup', methods=['POST'])
+def signup():
+    """ Step 2B: Register new account if not found """
+    data = request.get_json(force=True) or {}
+    email = data.get('email', '').strip().lower()
+    full_name = data.get('full_name')
+    password = data.get('password')
+
+    if not email or not EMAIL_REGEX.match(email) or not password or not full_name:
+        return jsonify({"status": "error", "message": "A valid email, full name and password are required"}), 400
+
+    # Double check if user registered in the meantime
+    try:
+        if User.query.filter_by(email=email).first():
+            return jsonify({"status": "error", "message": "Account already exists! Please log in."}), 400
+    except SQLAlchemyError:
+        return jsonify({"status": "error", "message": "Database is temporarily unavailable. Please try again shortly."}), 503
+
+    hashed_pwd = generate_password_hash(password)
+    new_user = User(full_name=full_name, email=email, password_hash=hashed_pwd)
+
+    try:
+        db.session.add(new_user)
+        db.session.commit()
+    except IntegrityError:
+        # Another request registered the same email in the gap between the
+        # check above and this commit — the DB's unique constraint on email
+        # is what actually prevents the duplicate; without this handler the
+        # request would fail with an unhandled 500 instead of a clean error.
+        db.session.rollback()
+        return jsonify({"status": "error", "message": "Account already exists! Please log in."}), 400
+    except SQLAlchemyError:
+        db.session.rollback()
+        return jsonify({"status": "error", "message": "Could not create account. Please try again."}), 500
+
+    # Automatically log them in after signup
+    session['user_id'] = new_user.user_id
+    session['user_name'] = new_user.full_name
+
+    session_token, expires_at = issue_session_token(new_user.user_id)
+
+    return jsonify({
+        "status": "success",
+        "message": f"Account created successfully! Welcome, {new_user.full_name}.",
+        "user_id": new_user.user_id,
+        "session_token": session_token,
+        "expires_at": expires_at
+    }), 201
+
+
+@app.route('/auth/validate-session', methods=['POST'])
+def validate_session():
+    """
+    Validates a locally-persisted "Stay logged in" token on app launch.
+    The client is expected to also check the expiry timestamp itself
+    before even calling this, but the token's expiry is re-checked here
+    server-side too (via max_age) so a stale/forged local flag can never
+    bypass login on its own.
+    """
+    data = request.get_json(force=True) or {}
+    token = data.get('session_token')
+
+    if not token:
+        return jsonify({"status": "error", "message": "No session token provided"}), 400
+
+    try:
+        payload = _session_serializer.loads(token, max_age=SESSION_TOKEN_MAX_AGE_SECONDS)
+    except SignatureExpired:
+        return jsonify({"status": "error", "message": "Session expired. Please log in again."}), 401
+    except BadSignature:
+        return jsonify({"status": "error", "message": "Invalid session token."}), 401
+
+    try:
+        user = User.query.get(payload.get('user_id'))
+    except SQLAlchemyError:
+        return jsonify({"status": "error", "message": "Database is temporarily unavailable. Please try again shortly."}), 503
+
+    if not user:
+        return jsonify({"status": "error", "message": "Account no longer exists."}), 401
+
+    return jsonify({
+        "status": "success",
+        "user_id": user.user_id,
+        "email": user.email,
+        "full_name": user.full_name
+    }), 200
+
+
+@app.route('/scan-url', methods=['POST'])
+def scan_url():
+    """ Automatically stores URL scan associated with the logged-in user """
+    current_user_id = session.get('user_id')
+    if not current_user_id:
+        return jsonify({"error": "Unauthorized. Please log in first."}), 401
+
+    data = request.get_json(force=True) or {}
+    url_to_scan = data.get('url', '').strip()
+
+    if not url_to_scan:
+        return jsonify({"error": "URL is required"}), 400
+
+    domain = urlparse(url_to_scan).netloc or url_to_scan
+
+    # Basic Evaluation Rules
+    if "login" in url_to_scan.lower() or "verify" in url_to_scan.lower():
+        verdict = 'phishing'
+        threat_score = 90.00
+    else:
+        verdict = 'safe'
+        threat_score = 0.00
+
+    # Auto-store scan record under user_id
+    scan_record = UserScan(
+        user_id=current_user_id,
+        scanned_url=url_to_scan,
+        domain=domain,
+        verdict=verdict,
+        threat_score=threat_score
+    )
+    try:
+        db.session.add(scan_record)
+        db.session.commit()
+    except SQLAlchemyError:
+        db.session.rollback()
+        return jsonify({"error": "Failed to save scan record"}), 500
+
+    return jsonify({
+        "status": "success",
+        "url": url_to_scan,
+        "verdict": verdict,
+        "threat_score": float(threat_score)
+    }), 200
+
+
+# ─────────────────────────────────────────────
 # Feature extraction — 45 features (v4.0, matches train.py)
 # ─────────────────────────────────────────────
 TLD_REPUTATION = {
+
     'gov': 1.0, 'mil': 1.0, 'edu': 0.95,
     'com': 0.80, 'org': 0.78, 'net': 0.75,
     'int': 0.90, 'uk':  0.80, 'de':  0.80,
