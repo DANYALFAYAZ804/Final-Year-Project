@@ -86,6 +86,21 @@ class User(db.Model):
     email = db.Column(db.String(150), unique=True, nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
     last_login_at = db.Column(db.DateTime)
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False)
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+
+
+class LoginHistory(db.Model):
+    """Audit trail of login attempts — one row per attempt, success or
+    failure, for the security-review/'who logged in when from where'
+    use case. Only written for attempts against a real, existing account
+    (an unknown-email attempt has no user_id to attach it to)."""
+    __tablename__ = 'login_history'
+    login_id = db.Column(db.BigInteger, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.user_id'), nullable=False)
+    ip_address = db.Column(db.String(45))  # 45 chars fits a full IPv6 address
+    login_status = db.Column(db.String(10), nullable=False)  # 'success' | 'failed'
+    logged_in_at = db.Column(db.DateTime, default=datetime.now, nullable=False)
 
 
 class UserScan(db.Model):
@@ -96,6 +111,7 @@ class UserScan(db.Model):
     domain = db.Column(db.String(255), nullable=False)
     verdict = db.Column(db.String(50), nullable=False)
     threat_score = db.Column(db.Numeric(5, 2), default=0.00)
+    scanned_at = db.Column(db.DateTime, default=datetime.now, nullable=False)
 
 
 def ensure_database_exists():
@@ -195,14 +211,18 @@ def login():
     if not user:
         return jsonify({"status": "error", "message": "No account found. Please sign up."}), 404
 
+    if not user.is_active:
+        return jsonify({"status": "error", "message": "This account has been deactivated."}), 403
+
     if check_password_hash(user.password_hash, password):
-        # Update last login timestamp
+        # Update last login timestamp and record the successful attempt.
         try:
             user.last_login_at = datetime.now()
+            db.session.add(LoginHistory(user_id=user.user_id, ip_address=request.remote_addr, login_status='success'))
             db.session.commit()
         except SQLAlchemyError:
             db.session.rollback()
-            # Non-critical — still let the user in even if the timestamp update failed.
+            # Non-critical — still let the user in even if the timestamp/audit-log update failed.
 
         # Save active session
         session['user_id'] = user.user_id
@@ -220,6 +240,14 @@ def login():
             "session_token": session_token,
             "expires_at": expires_at
         }), 200
+
+    # Record the failed attempt too, but never let a logging failure mask
+    # the actual "incorrect password" response the user needs to see.
+    try:
+        db.session.add(LoginHistory(user_id=user.user_id, ip_address=request.remote_addr, login_status='failed'))
+        db.session.commit()
+    except SQLAlchemyError:
+        db.session.rollback()
 
     return jsonify({"status": "error", "message": "Incorrect password. Please try again."}), 401
 
@@ -314,28 +342,49 @@ def validate_session():
 
 @app.route('/scan-url', methods=['POST'])
 def scan_url():
-    """ Automatically stores URL scan associated with the logged-in user """
-    current_user_id = session.get('user_id')
-    if not current_user_id:
-        return jsonify({"error": "Unauthorized. Please log in first."}), 401
+    """
+    Persists a completed scan under the account identified by
+    session_token. This deliberately does NOT use Flask's cookie-based
+    `session` (unlike login()/signup() above, which set it for
+    completeness) — the Electron client's main-process fetch() calls
+    never send/receive cookies, so a cookie-session check here would
+    silently reject every real caller. The token is the same one already
+    issued by /auth/login and /auth/signup, decoded the same way
+    /auth/validate-session does.
 
+    The verdict/threat_score are supplied by the caller rather than
+    recomputed here: the Electron app's own ML/WHOIS/VirusTotal trust
+    score engine has already produced them, so this endpoint's job is
+    only to store that result under the right user, not to re-derive it.
+    """
     data = request.get_json(force=True) or {}
-    url_to_scan = data.get('url', '').strip()
+    token = data.get('session_token')
+    if not token:
+        return jsonify({"status": "error", "message": "Not logged in."}), 401
 
+    try:
+        payload = _session_serializer.loads(token, max_age=SESSION_TOKEN_MAX_AGE_SECONDS)
+    except (SignatureExpired, BadSignature):
+        return jsonify({"status": "error", "message": "Session expired or invalid. Please log in again."}), 401
+
+    current_user_id = payload.get('user_id')
+
+    url_to_scan = (data.get('url') or '').strip()
     if not url_to_scan:
-        return jsonify({"error": "URL is required"}), 400
+        return jsonify({"status": "error", "message": "URL is required"}), 400
+
+    verdict = data.get('verdict') or 'suspicious'
+    if verdict not in ('safe', 'suspicious', 'malicious', 'phishing'):
+        verdict = 'suspicious'
+
+    try:
+        threat_score = float(data.get('threat_score', 0))
+    except (TypeError, ValueError):
+        threat_score = 0.0
+    threat_score = max(0.0, min(100.0, threat_score))
 
     domain = urlparse(url_to_scan).netloc or url_to_scan
 
-    # Basic Evaluation Rules
-    if "login" in url_to_scan.lower() or "verify" in url_to_scan.lower():
-        verdict = 'phishing'
-        threat_score = 90.00
-    else:
-        verdict = 'safe'
-        threat_score = 0.00
-
-    # Auto-store scan record under user_id
     scan_record = UserScan(
         user_id=current_user_id,
         scanned_url=url_to_scan,
@@ -348,14 +397,37 @@ def scan_url():
         db.session.commit()
     except SQLAlchemyError:
         db.session.rollback()
-        return jsonify({"error": "Failed to save scan record"}), 500
+        return jsonify({"status": "error", "message": "Failed to save scan record"}), 500
+
+    return jsonify({"status": "success"}), 200
+
+
+@app.route('/my-stats', methods=['GET'])
+def my_stats():
+    """ Returns the logged-in user's scan summary — requires session_token
+    as a query param since this is a GET request with no body. """
+    token = request.args.get('session_token')
+    if not token:
+        return jsonify({"error": "Not logged in."}), 401
+
+    try:
+        payload = _session_serializer.loads(token, max_age=SESSION_TOKEN_MAX_AGE_SECONDS)
+    except (SignatureExpired, BadSignature):
+        return jsonify({"error": "Session expired or invalid. Please log in again."}), 401
+
+    current_user_id = payload.get('user_id')
+
+    try:
+        scans = UserScan.query.filter_by(user_id=current_user_id).all()
+    except SQLAlchemyError:
+        return jsonify({"error": "Database is temporarily unavailable. Please try again shortly."}), 503
 
     return jsonify({
-        "status": "success",
-        "url": url_to_scan,
-        "verdict": verdict,
-        "threat_score": float(threat_score)
-    }), 200
+        "total_searched": len(scans),
+        "total_safe": sum(1 for s in scans if s.verdict == 'safe'),
+        "total_phishing": sum(1 for s in scans if s.verdict in ('phishing', 'malicious')),
+        "total_suspicious": sum(1 for s in scans if s.verdict == 'suspicious'),
+    })
 
 
 # ─────────────────────────────────────────────

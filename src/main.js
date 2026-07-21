@@ -3,10 +3,65 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import http from 'http';
 import https from 'https';
+import fs from 'fs';
 import * as configStore from './config-store.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// ──────────────────────────────────────────────
+// Load a project-root .env file (if present) so local overrides
+// like BACKEND_URL persist permanently across terminal sessions,
+// instead of needing to be set manually every time before `npm start`.
+//
+// Dev-mode ONLY. Packaged builds used to also bundle a copy of this
+// file (via forge.config.js's extraResource) so a local override could
+// follow into an installed .msi/.exe — but that created two independent
+// .env files that could silently drift out of sync: fixing the source
+// .env did nothing for an already-packaged build still reading its own
+// stale bundled copy, which looked like the fix hadn't worked at all.
+// Packaged builds now always resolve BACKEND_URL from a real OS
+// environment variable (if one is explicitly set on that machine) or
+// the hardcoded Railway fallback below — never from a bundled file that
+// can go stale unnoticed.
+// ──────────────────────────────────────────────
+function loadDotEnv() {
+    if (app.isPackaged) return;
+    try {
+        // Try several candidate roots: getAppPath() resolves differently
+        // depending on how the app was launched (raw `electron .` or
+        // bundled via electron-forge's Vite plugin into `.vite/build/`),
+        // so check the project root from every angle rather than just one.
+        const candidates = [
+            process.cwd(),
+            path.join(__dirname, '..'),
+            path.join(__dirname, '..', '..'),
+        ];
+        try { candidates.push(app.getAppPath()); } catch (_) {}
+
+        let envPath = null;
+        for (const dir of candidates) {
+            const candidate = path.join(dir, '.env');
+            if (fs.existsSync(candidate)) { envPath = candidate; break; }
+        }
+        if (!envPath) return;
+
+        const lines = fs.readFileSync(envPath, 'utf8').split('\n');
+        for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed || trimmed.startsWith('#')) continue;
+            const eq = trimmed.indexOf('=');
+            if (eq === -1) continue;
+            const key = trimmed.slice(0, eq).trim();
+            let value = trimmed.slice(eq + 1).trim();
+            if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+                value = value.slice(1, -1);
+            }
+            if (!(key in process.env)) process.env[key] = value;
+        }
+    } catch (_) { /* ignore — falls back to defaults / real env vars */ }
+}
+loadDotEnv();
 
 // ──────────────────────────────────────────────
 // Whitelist of known authentic domains
@@ -66,31 +121,60 @@ const whoisCache = new Map();
 const WHOIS_TTL_MS = 10 * 60 * 1000;
 
 // ──────────────────────────────────────────────
-// ML service URL — now points at the Railway-hosted backend.
-// Can still be overridden with the ML_SERVICE_URL env var
-// (e.g. for local development against a locally-run backend).
+// Backend base URL — the single source of truth for BOTH the ML scoring
+// endpoints (/predict, /health) and the auth endpoints (/auth/*). These
+// were already governed by one constant, but it was named ML_SERVICE_URL,
+// which reads as "only affects ML scoring" — that misleading name is what
+// made a URL mismatch look like the likely cause when auth started
+// failing. There has only ever been one backend URL; keep it that way and
+// name it accordingly so this class of confusion can't happen again.
+//
+// Overridden via BACKEND_URL in the project's .env file (loaded above) or
+// a real env var. ML_SERVICE_URL is still honored as a fallback so any
+// existing deployment config that already sets it keeps working.
 // ──────────────────────────────────────────────
-const ML_SERVICE_URL = process.env.ML_SERVICE_URL
+const BACKEND_URL = process.env.BACKEND_URL || process.env.ML_SERVICE_URL
     || 'https://final-year-project-production-9edf.up.railway.app';
 
 let mlReady = false;
 
+// The current logged-in session's token, held in memory only (never
+// written to disk unless the user also checked "Stay logged in", which
+// is handled separately via config-store). This is what lets completed
+// scans be attributed to the right account and persisted server-side via
+// POST /scan-url, for every logged-in session — not just "Stay logged
+// in" ones, since a token is issued on every successful login/signup
+// regardless of that checkbox.
+let currentSessionToken = null;
+
 function startMlService() {
-    console.log(`[ML] Using remote ML service at ${ML_SERVICE_URL}`);
+    console.log(`[Backend] Using backend at ${BACKEND_URL} for both ML scoring and auth.`);
     probeMLHealth();
 }
 
 function probeMLHealth(retries = 10, delayMs = 2000) {
-    httpGet(`${ML_SERVICE_URL}/health`).then(res => {
+    httpGet(`${BACKEND_URL}/health`).then(res => {
         if (res.status === 200) {
             mlReady = true;
             console.log('[ML] Remote service healthy:', res.body);
         } else if (retries > 0) {
             setTimeout(() => probeMLHealth(retries - 1, delayMs), delayMs);
+        } else {
+            // Giving up here permanently disabled ML scoring for the rest of
+            // the session (scoreML() short-circuits to 0.5 while !mlReady),
+            // which is a real problem against a free-tier host like Railway
+            // that can take longer than the initial burst to wake up from a
+            // cold start. Keep retrying slowly in the background instead of
+            // stopping forever.
+            console.error('[ML] Remote service unreachable after initial retries; retrying periodically in the background.');
+            setTimeout(() => probeMLHealth(3, 15000), 15000);
         }
     }).catch(() => {
         if (retries > 0) setTimeout(() => probeMLHealth(retries - 1, delayMs), delayMs);
-        else console.error('[ML] Remote service unreachable after retries.');
+        else {
+            console.error('[ML] Remote service unreachable after initial retries; retrying periodically in the background.');
+            setTimeout(() => probeMLHealth(3, 15000), 15000);
+        }
     });
 }
 
@@ -146,6 +230,34 @@ function httpGet(url, headers = {}) {
         req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
         req.end();
     });
+}
+
+// ──────────────────────────────────────────────
+// Fetch with a per-attempt timeout + retry/backoff, for one-shot
+// user-facing requests (auth). This mirrors the retry/backoff idea
+// already used by probeMLHealth() for the background ML health check,
+// but bounded to a handful of short attempts instead of running
+// indefinitely, since a real user is actively waiting on the result
+// (a login click) rather than it happening silently on a timer.
+// ──────────────────────────────────────────────
+function fetchWithTimeout(url, options = {}, timeoutMs = 8000) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    return fetch(url, { ...options, signal: controller.signal }).finally(() => clearTimeout(timer));
+}
+
+async function fetchJsonWithRetry(url, options, { retries = 2, timeoutMs = 8000, backoffMs = 1500 } = {}) {
+    let lastErr;
+    for (let attempt = 0; attempt <= retries; attempt++) {
+        try {
+            const response = await fetchWithTimeout(url, options, timeoutMs);
+            return await response.json();
+        } catch (e) {
+            lastErr = e;
+            if (attempt < retries) await new Promise(r => setTimeout(r, backoffMs * (attempt + 1)));
+        }
+    }
+    throw lastErr;
 }
 
 // ──────────────────────────────────────────────
@@ -232,7 +344,7 @@ async function inspectPage(url) {
 // ML Classifier — calls the Railway-hosted /predict endpoint
 // ──────────────────────────────────────────────
 async function checkWebsite(url, signals = {}) {
-    const response = await fetch(`${ML_SERVICE_URL}/predict`, {
+    const response = await fetch(`${BACKEND_URL}/predict`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -254,6 +366,47 @@ async function scoreML(url, signals) {
         const result = await checkWebsite(url, signals);
         return typeof result.score === 'number' ? result.score : 0.5;
     } catch (_) { return 0.5; }
+}
+
+// ──────────────────────────────────────────────
+// Auth — check-email / signup / login / session-validation against the
+// backend's user database. Each uses fetchJsonWithRetry so a single slow
+// or dropped connection attempt (e.g. Railway waking from a cold start)
+// doesn't surface as an immediate hard failure to the user.
+// ──────────────────────────────────────────────
+async function authCheckEmail(email) {
+    return fetchJsonWithRetry(`${BACKEND_URL}/auth/check-email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+    });
+}
+
+async function authSignup(email, fullName, password) {
+    return fetchJsonWithRetry(`${BACKEND_URL}/auth/signup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, full_name: fullName, password }),
+    });
+}
+
+async function authLogin(email, password) {
+    return fetchJsonWithRetry(`${BACKEND_URL}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+    });
+}
+
+async function authValidateSession(token) {
+    // A shorter, lighter retry budget than the other auth calls — this
+    // one runs silently at app launch (before any UI is shown), so it
+    // shouldn't hold up startup as long as a user-initiated login click can.
+    return fetchJsonWithRetry(`${BACKEND_URL}/auth/validate-session`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_token: token }),
+    }, { retries: 1, timeoutMs: 6000, backoffMs: 1000 });
 }
 
 // ──────────────────────────────────────────────
@@ -427,6 +580,27 @@ function createWindow() {
 // ──────────────────────────────────────────────
 // IPC Handlers
 // ──────────────────────────────────────────────
+
+// Best-effort persistence of a completed scan under the logged-in
+// account. Fire-and-forget: a DB hiccup on the backend must never block
+// or slow down browsing, so this is never awaited by the scan-url
+// handler below and any failure is only logged, not surfaced to the UI.
+function saveScanRecord(url, result) {
+    if (!currentSessionToken) return; // not logged in this run — nothing to attribute it to
+    fetchJsonWithRetry(`${BACKEND_URL}/scan-url`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            session_token: currentSessionToken,
+            url,
+            verdict: result.verdict,
+            threat_score: result.score,
+        }),
+    }, { retries: 1, timeoutMs: 6000, backoffMs: 1000 }).catch((e) => {
+        console.error(`[Scan] Failed to persist scan record against ${BACKEND_URL}:`, e.message);
+    });
+}
+
 ipcMain.handle('scan-url', async (event, url) => {
     const settings = getSettings();
     statsScanned++;
@@ -439,6 +613,7 @@ ipcMain.handle('scan-url', async (event, url) => {
             mainWindow.webContents.send('keyboard-unlock', result);
         }
     }
+    saveScanRecord(url, result);
     return result;
 });
 
@@ -454,6 +629,101 @@ ipcMain.handle('save-settings', (event, settings) => {
 
 ipcMain.handle('clear-cache', () => { whoisCache.clear(); return true; });
 ipcMain.handle('get-stats', () => ({ scanned: statsScanned, blocked: statsBlocked }));
+
+ipcMain.handle('logout', () => {
+    configStore.remove('userEmail'); // cleanup for any pre-existing cached value
+    configStore.remove('session'); // clears any persisted "Stay logged in" session
+    currentSessionToken = null;
+    return true;
+});
+
+ipcMain.handle('auth-check-email', async (event, email) => {
+    try {
+        return await authCheckEmail(email);
+    } catch (e) {
+        console.error(`[Auth] check-email failed against ${BACKEND_URL} after retries:`, e.message);
+        return { status: 'error', reason: 'network', message: "Couldn't reach the server after several attempts. Check your connection and try again." };
+    }
+});
+
+ipcMain.handle('auth-signup', async (event, { email, fullName, password, staySignedIn }) => {
+    try {
+        const result = await authSignup(email, fullName, password);
+        persistOrClearSession(result, staySignedIn);
+        return result;
+    } catch (e) {
+        console.error(`[Auth] signup failed against ${BACKEND_URL} after retries:`, e.message);
+        return { status: 'error', reason: 'network', message: "Couldn't reach the server after several attempts. Check your connection and try again." };
+    }
+});
+
+ipcMain.handle('auth-login', async (event, { email, password, staySignedIn }) => {
+    try {
+        const result = await authLogin(email, password);
+        persistOrClearSession(result, staySignedIn);
+        return result;
+    } catch (e) {
+        console.error(`[Auth] login failed against ${BACKEND_URL} after retries:`, e.message);
+        return { status: 'error', reason: 'network', message: "Couldn't reach the server after several attempts. Check your connection and try again." };
+    }
+});
+
+// Persists the session token returned by a successful login/signup only if
+// the user opted into "Stay logged in"; otherwise makes sure no stale
+// session lingers from an earlier opt-in, so unchecking the box behaves
+// the way a user would expect the next time they open the app.
+function persistOrClearSession(result, staySignedIn) {
+    if (result?.status !== 'success') return;
+    // Kept in memory for this run regardless of "Stay logged in" — that
+    // checkbox only controls whether it also survives to the NEXT launch.
+    currentSessionToken = result.session_token || null;
+    if (staySignedIn && result.session_token && result.expires_at) {
+        // config-store's encrypted path (safeStorage.encryptString) only
+        // accepts a string, not an object — serialize to JSON ourselves
+        // and parse it back out on the read side below.
+        configStore.set('session', JSON.stringify({ token: result.session_token, expiresAt: result.expires_at }), true);
+    } else {
+        configStore.remove('session');
+    }
+}
+
+function readStoredSession() {
+    const raw = configStore.get('session');
+    if (!raw) return null;
+    try { return JSON.parse(raw); } catch (_) { return null; }
+}
+
+ipcMain.handle('try-resume-session', async () => {
+    const stored = readStoredSession();
+    if (!stored || !stored.token || !stored.expiresAt) return false;
+
+    // Local expiry check first — no point calling the backend at all if
+    // the token is already past its 30-day lifetime on the client side.
+    if (Date.now() > stored.expiresAt) {
+        configStore.remove('session');
+        return false;
+    }
+
+    try {
+        const result = await authValidateSession(stored.token);
+        if (result.status === 'success') {
+            currentSessionToken = stored.token; // resumed — scans can be saved again this run
+            return true;
+        }
+        // Backend explicitly rejected it (expired/invalid/account gone).
+        configStore.remove('session');
+        return false;
+    } catch (e) {
+        // Couldn't reach the backend to confirm (offline/unreachable) —
+        // fail safe by requiring login for THIS launch, but deliberately
+        // keep the stored token rather than deleting it: a connectivity
+        // blip shouldn't force a "remember me" user to log in again once
+        // the backend comes back, only an explicit server-side rejection
+        // or the 30-day local expiry should do that.
+        console.error(`[Auth] session validation failed against ${BACKEND_URL} after retries:`, e.message);
+        return false;
+    }
+});
 
 // ──────────────────────────────────────────────
 // App lifecycle
