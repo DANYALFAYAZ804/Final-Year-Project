@@ -267,7 +267,8 @@ def signup():
     try:
         if User.query.filter_by(email=email).first():
             return jsonify({"status": "error", "message": "Account already exists! Please log in."}), 400
-    except SQLAlchemyError:
+    except SQLAlchemyError as e:
+        print(f"[DEBUG SIGNUP-CHECK ERROR] {e}")
         return jsonify({"status": "error", "message": "Database is temporarily unavailable. Please try again shortly."}), 503
 
     hashed_pwd = generate_password_hash(password)
@@ -283,7 +284,8 @@ def signup():
         # request would fail with an unhandled 500 instead of a clean error.
         db.session.rollback()
         return jsonify({"status": "error", "message": "Account already exists! Please log in."}), 400
-    except SQLAlchemyError:
+    except SQLAlchemyError as e:
+        print(f"[DEBUG SIGNUP-COMMIT ERROR] {e}")
         db.session.rollback()
         return jsonify({"status": "error", "message": "Could not create account. Please try again."}), 500
 
