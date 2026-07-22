@@ -5,7 +5,7 @@
 <title>Trust-Flow</title>
 <meta http-equiv="Content-Security-Policy" content="
     default-src 'self';
-    script-src 'self' 'unsafe-inline';
+    script-src 'self';
     style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com;
     img-src 'self' data: https: blob:;
     font-src 'self' https://cdnjs.cloudflare.com https://fonts.gstatic.com;
@@ -26,6 +26,41 @@
         <div class="splash-name">Trust<span>Flow</span></div>
         <div class="splash-bar"><div class="splash-fill" id="splash-fill"></div></div>
         <p class="splash-status" id="splash-status">Initialising security engine…</p>
+    </div>
+</div>
+
+<!-- ── Login Gate ── -->
+<div class="login-screen" id="login-screen" style="display:none;">
+    <div class="login-card">
+        <img src="./src/assets/Trust-Flow-logo.png" alt="Logo" class="login-logo">
+        <div class="login-title">Trust<span>Flow</span></div>
+
+        <form id="login-form" class="login-form">
+            <label class="login-label" for="login-fullname" id="login-fullname-label" style="display:none;">Full name</label>
+            <input type="text" id="login-fullname" class="login-input" placeholder="Jane Doe" autocomplete="name" style="display:none;">
+
+            <label class="login-label" for="login-email">Email address</label>
+            <input type="email" id="login-email" class="login-input" placeholder="you@example.com" autocomplete="email" required>
+
+            <label class="login-label" for="login-password">Password</label>
+            <input type="password" id="login-password" class="login-input" placeholder="••••••••" autocomplete="current-password" required>
+
+            <label class="login-checkbox-row" for="login-stay">
+                <input type="checkbox" id="login-stay">
+                Stay logged in
+            </label>
+
+            <p class="login-error" id="login-error" style="display:none;"></p>
+            <button type="submit" class="login-btn" id="login-submit">Sign in</button>
+            <button type="button" class="login-btn login-btn-secondary" id="login-retry" style="display:none;">Try again</button>
+        </form>
+
+        <div class="login-divider"><span>or</span></div>
+
+        <p class="login-toggle">
+            <span id="login-toggle-text">New to TrustFlow?</span>
+            <a href="#" id="login-toggle-link">Create an account</a>
+        </p>
     </div>
 </div>
 
@@ -78,7 +113,7 @@
 
     <div class="nav-right">
         <button id="go"       title="Go"       class="nav-btn nav-btn-go"><i class="fa-solid fa-arrow-right"></i></button>
-        <button id="bookmark" title="Bookmark" class="nav-btn" id="bookmark"><i class="fa-regular fa-star"></i></button>
+        <button id="bookmark" title="Bookmark" class="nav-btn"><i class="fa-regular fa-star"></i></button>
         <button id="settings" title="Settings" class="nav-btn"><i class="fa-solid fa-sliders"></i></button>
     </div>
 </div>
@@ -135,7 +170,7 @@
                     <i class="fa-regular fa-eye"></i>
                 </button>
             </div>
-            <a class="panel-hint-link" href="#" onclick="return false;">
+            <a class="panel-hint-link" href="#" id="vt-key-hint-link">
                 <i class="fa-solid fa-arrow-up-right-from-square"></i> Get a free key at virustotal.com
             </a>
         </div>
@@ -182,6 +217,15 @@
             </div>
             <button class="btn-panel-secondary" id="clear-cache">
                 <i class="fa-solid fa-trash-can"></i> Clear Scan Cache
+            </button>
+        </div>
+
+        <div class="panel-section">
+            <div class="panel-section-label">
+                <i class="fa-solid fa-user"></i> Account
+            </div>
+            <button class="btn-panel-secondary" id="logout-btn">
+                <i class="fa-solid fa-arrow-right-from-bracket"></i> Log Out
             </button>
         </div>
     </div>

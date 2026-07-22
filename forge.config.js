@@ -11,6 +11,14 @@ module.exports = {
     // so main.js can load the icon at runtime via process.resourcesPath,
     // since files under src/ aren't otherwise guaranteed to land in a
     // predictable spot after the Vite build.
+    // .env is intentionally NOT copied here anymore: packaged builds
+    // previously bundled their own snapshot of .env, which could silently
+    // drift out of sync with the source file (fixing the source .env
+    // wouldn't affect an already-packaged build's stale bundled copy).
+    // main.js's loadDotEnv() now skips reading any .env at all once
+    // app.isPackaged is true, so packaged builds always resolve
+    // BACKEND_URL from a real OS environment variable or the hardcoded
+    // Railway fallback — never from a bundled file.
     extraResource: [
       'src/assets',
     ],

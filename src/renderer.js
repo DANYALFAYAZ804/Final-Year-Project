@@ -33,6 +33,18 @@ const vtReveal      = document.getElementById('vt-reveal');
 const splashEl      = document.getElementById('splash');
 const splashFill    = document.getElementById('splash-fill');
 const splashStatus  = document.getElementById('splash-status');
+const loginScreen        = document.getElementById('login-screen');
+const loginForm          = document.getElementById('login-form');
+const loginEmail         = document.getElementById('login-email');
+const loginFullname      = document.getElementById('login-fullname');
+const loginFullnameLabel = document.getElementById('login-fullname-label');
+const loginPassword      = document.getElementById('login-password');
+const loginError         = document.getElementById('login-error');
+const loginSubmit        = document.getElementById('login-submit');
+const loginToggleText    = document.getElementById('login-toggle-text');
+const loginToggleLink    = document.getElementById('login-toggle-link');
+const loginStay          = document.getElementById('login-stay');
+const loginRetry         = document.getElementById('login-retry');
 
 // ──── State ────
 let tabs           = [];
@@ -153,6 +165,13 @@ vtReveal?.addEventListener('click', () => {
         inp.type = 'password';
         icon.className = 'fa-regular fa-eye';
     }
+});
+
+// VT key hint link is decorative only (no navigation target); prevent
+// default here instead of via an inline onclick attribute, which would
+// otherwise force 'unsafe-inline' into the page's script-src CSP directive.
+document.getElementById('vt-key-hint-link')?.addEventListener('click', (e) => {
+    e.preventDefault();
 });
 
 // Settings engine radio sync
@@ -413,14 +432,20 @@ async function navigateTo(rawUrl, tabId) {
     const url = resolveUrl(rawUrl);
     if (!url) return;
 
-    urlInput.value = url;
-    addrClear.style.display = 'flex';
-    showScanning();
-    removeOverlays();
-    startNavProgress();
-
     const tab = tabs.find(t => t.id === tabId);
-    if (!tab) { hideScanning(); finishNavProgress(); return; }
+    if (!tab) return;
+
+    // Only touch the shared address bar / shield / progress-bar UI if this
+    // tab is (still) the one the user is actually looking at — otherwise a
+    // scan started on one tab can finish after the user has already
+    // switched to another tab and overwrite that tab's UI state.
+    if (activeTabId === tabId) {
+        urlInput.value = url;
+        addrClear.style.display = 'flex';
+        showScanning();
+        removeOverlays();
+        startNavProgress();
+    }
 
     if (tab.page) {
         tab.page.style.display = 'none';
@@ -441,26 +466,36 @@ async function navigateTo(rawUrl, tabId) {
         result = { score: 50, verdict: 'safe', details: { ml: 50, whois: 50, virustotal: 50, domain: '' } };
     }
 
-    hideScanning();
-    finishNavProgress();
-    updateShield(result);
+    // Re-check: the user may have switched tabs while the scan (network
+    // calls to the ML/WHOIS/VirusTotal backends) was in flight.
+    const isActiveNow = activeTabId === tabId;
+
+    if (isActiveNow) {
+        hideScanning();
+        finishNavProgress();
+        updateShield(result);
+    }
     refreshStats();
 
     if (result.verdict === 'malicious') {
         tab.webview.style.display = 'none';
-        lockKeyboard(result);
-        showBlockPage(result, url, tabId);
-        showToast('Phishing site blocked!', 'danger');
+        lockKeyboard(result, tab.webview);
+        if (isActiveNow) {
+            showBlockPage(result, url, tabId);
+            showToast('Phishing site blocked!', 'danger');
+        }
     } else if (result.verdict === 'suspicious') {
         tab.webview.style.display = 'none';
-        lockKeyboard(result);
-        showWarningOverlay(result, url, tabId);
-        showToast('Suspicious site detected', 'warn');
+        lockKeyboard(result, tab.webview);
+        if (isActiveNow) {
+            showWarningOverlay(result, url, tabId);
+            showToast('Suspicious site detected', 'warn');
+        }
     } else {
-        unlockKeyboard();
+        unlockKeyboard(tab.webview);
         tab.webview.src = url;
         tab.url = url;
-        if (result.score >= 80) showToast(`Site verified safe (${result.score}/100)`, 'safe', 2000);
+        if (isActiveNow && result.score >= 80) showToast(`Site verified safe (${result.score}/100)`, 'safe', 2000);
     }
 }
 
@@ -622,47 +657,53 @@ function showBlockPage(result, url, tabId) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Keyboard Lock
 // ─────────────────────────────────────────────────────────────────────────────
-function lockKeyboard(result) {
-    keyboardLocked    = true;
-    urlInput.disabled = true;
-    const wv = getActiveWebview();
-    if (wv) {
-        wv.executeJavaScript(`
-            (function(){
-                if(window.__tf_locked) return;
-                window.__tf_locked = true;
-                const s = document.createElement('style');
-                s.id = '__tf_ls';
-                s.textContent = 'input:focus,textarea:focus,[contenteditable]:focus{outline:3px solid #ef4444!important;box-shadow:0 0 12px #ef444480!important;}';
-                document.head.appendChild(s);
-                window.__tf_lh = function(e){
-                    if(['INPUT','TEXTAREA'].includes(e.target.tagName)||e.target.isContentEditable){
-                        e.preventDefault();e.stopImmediatePropagation();
-                    }
-                };
-                document.addEventListener('keydown',window.__tf_lh,true);
-                document.addEventListener('keypress',window.__tf_lh,true);
-            })();
-        `).catch(() => {});
+function lockKeyboard(result, webview) {
+    const wv = webview || getActiveWebview();
+    if (!wv) return;
+    // Only flip the global "locked" flag / disable the address bar when the
+    // affected webview actually belongs to the tab the user is looking at.
+    // A scan resolving for a background tab must not freeze input on the
+    // tab currently on screen.
+    if (webview === undefined || wv === getActiveWebview()) {
+        keyboardLocked    = true;
+        urlInput.disabled = true;
     }
+    wv.executeJavaScript(`
+        (function(){
+            if(window.__tf_locked) return;
+            window.__tf_locked = true;
+            const s = document.createElement('style');
+            s.id = '__tf_ls';
+            s.textContent = 'input:focus,textarea:focus,[contenteditable]:focus{outline:3px solid #ef4444!important;box-shadow:0 0 12px #ef444480!important;}';
+            document.head.appendChild(s);
+            window.__tf_lh = function(e){
+                if(['INPUT','TEXTAREA'].includes(e.target.tagName)||e.target.isContentEditable){
+                    e.preventDefault();e.stopImmediatePropagation();
+                }
+            };
+            document.addEventListener('keydown',window.__tf_lh,true);
+            document.addEventListener('keypress',window.__tf_lh,true);
+        })();
+    `).catch(() => {});
 }
 
-function unlockKeyboard() {
-    keyboardLocked    = false;
-    urlInput.disabled = false;
-    const wv = getActiveWebview();
-    if (wv) {
-        wv.executeJavaScript(`
-            (function(){
-                if(!window.__tf_locked) return;
-                window.__tf_locked = false;
-                document.removeEventListener('keydown',window.__tf_lh,true);
-                document.removeEventListener('keypress',window.__tf_lh,true);
-                const s = document.getElementById('__tf_ls');
-                if(s) s.remove();
-            })();
-        `).catch(() => {});
+function unlockKeyboard(webview) {
+    const wv = webview || getActiveWebview();
+    if (webview === undefined || wv === getActiveWebview()) {
+        keyboardLocked    = false;
+        urlInput.disabled = false;
     }
+    if (!wv) return;
+    wv.executeJavaScript(`
+        (function(){
+            if(!window.__tf_locked) return;
+            window.__tf_locked = false;
+            document.removeEventListener('keydown',window.__tf_lh,true);
+            document.removeEventListener('keypress',window.__tf_lh,true);
+            const s = document.getElementById('__tf_ls');
+            if(s) s.remove();
+        })();
+    `).catch(() => {});
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -757,6 +798,138 @@ document.getElementById('clear-cache').addEventListener('click', async () => {
     showToast('Scan cache cleared', 'info', 2000);
 });
 
+document.getElementById('logout-btn').addEventListener('click', async () => {
+    await window.trustflow?.logout().catch(() => {});
+    // Reload the whole renderer so init() re-runs requireLogin(), which will
+    // now find no cached email and show the login screen again — simpler
+    // and more reliable than trying to reset all in-memory tab/UI state.
+    window.location.reload();
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Login Gate — require a database-backed account before the browser can be used
+// ─────────────────────────────────────────────────────────────────────────────
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+let authMode = 'login'; // 'login' | 'signup'
+
+function applyAuthMode(mode) {
+    authMode = mode;
+    loginError.style.display = 'none';
+    loginFullname.value = '';
+
+    if (mode === 'signup') {
+        loginFullname.style.display = 'block';
+        loginFullnameLabel.style.display = 'block';
+        loginPassword.setAttribute('autocomplete', 'new-password');
+        loginSubmit.textContent = 'Create account';
+        loginToggleText.textContent = 'Already have an account?';
+        loginToggleLink.textContent = 'Sign in';
+    } else {
+        loginFullname.style.display = 'none';
+        loginFullnameLabel.style.display = 'none';
+        loginPassword.setAttribute('autocomplete', 'current-password');
+        loginSubmit.textContent = 'Sign in';
+        loginToggleText.textContent = 'New to TrustFlow?';
+        loginToggleLink.textContent = 'Create an account';
+    }
+}
+
+function showLoginScreen() {
+    return new Promise((resolve) => {
+        loginScreen.style.display = 'flex';
+        loginEmail.value = '';
+        loginPassword.value = '';
+        loginStay.checked = false; // unchecked by default, every single time
+        loginRetry.style.display = 'none';
+        applyAuthMode('login');
+        loginEmail.focus();
+
+        loginToggleLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            applyAuthMode(authMode === 'login' ? 'signup' : 'login');
+            (authMode === 'signup' ? loginFullname : loginEmail).focus();
+        });
+
+        async function attemptAuth() {
+            const email = loginEmail.value.trim();
+            const password = loginPassword.value;
+            const fullName = loginFullname.value.trim();
+
+            loginRetry.style.display = 'none';
+
+            if (!EMAIL_REGEX.test(email)) {
+                loginError.textContent = 'Please enter a valid email address.';
+                loginError.style.display = 'block';
+                return;
+            }
+            if (password.length < 6) {
+                loginError.textContent = 'Password must be at least 6 characters.';
+                loginError.style.display = 'block';
+                return;
+            }
+            if (authMode === 'signup' && !fullName) {
+                loginError.textContent = 'Please enter your full name.';
+                loginError.style.display = 'block';
+                return;
+            }
+
+            const originalLabel = loginSubmit.textContent;
+            loginSubmit.disabled = true;
+            loginSubmit.textContent = authMode === 'login' ? 'Signing in…' : 'Creating account…';
+
+            const staySignedIn = loginStay.checked;
+            const actionPromise = authMode === 'login'
+                ? window.trustflow?.authLogin({ email, password, staySignedIn })
+                : window.trustflow?.authSignup({ email, fullName, password, staySignedIn });
+
+            const result = await actionPromise?.catch(() => ({
+                status: 'error',
+                reason: 'network',
+                message: 'Unable to reach the server. Please try again.',
+            }));
+
+            loginSubmit.disabled = false;
+            loginSubmit.textContent = originalLabel;
+
+            if (result?.status !== 'success') {
+                loginError.textContent = result?.message || 'Something went wrong. Please try again.';
+                loginError.style.display = 'block';
+                // Only offer "Try again" for a genuine connectivity failure —
+                // retrying an identical wrong password or duplicate email
+                // would just fail the same way, so don't show it for those.
+                loginRetry.style.display = result?.reason === 'network' ? 'inline-block' : 'none';
+                return;
+            }
+
+            loginError.style.display = 'none';
+            loginRetry.style.display = 'none';
+            loginScreen.style.display = 'none';
+            resolve(email);
+        }
+
+        loginForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            attemptAuth();
+        });
+
+        loginRetry.addEventListener('click', () => attemptAuth());
+    });
+}
+
+async function requireLogin() {
+    if (!window.trustflow) return;
+    // "Stay logged in" resume path: only skips the login screen if a
+    // locally-persisted session exists, hasn't passed its 30-day local
+    // expiry, AND is confirmed still valid by the backend (see
+    // try-resume-session in main.js) — never on a locally-stored flag
+    // alone. Unchecked-by-default users are completely unaffected: with
+    // nothing stored, this always resolves to false and falls through to
+    // showLoginScreen() exactly as before.
+    const resumed = await window.trustflow.tryResumeSession().catch(() => false);
+    if (resumed) return;
+    await showLoginScreen();
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Init
 // ─────────────────────────────────────────────────────────────────────────────
@@ -772,6 +945,8 @@ document.getElementById('clear-cache').addEventListener('click', async () => {
         window.trustflow.onKeyboardLock?.(() => {});
         window.trustflow.onKeyboardUnlock?.(() => {});
     }
+
+    await requireLogin();
 
     createTab();
     setInterval(() => refreshStats(), 15000);

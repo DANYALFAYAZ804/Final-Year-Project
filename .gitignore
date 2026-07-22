@@ -90,3 +90,6 @@ typings/
 
 # Electron-Forge
 out/
+
+backend/__pycache__/
+backend/instance/
