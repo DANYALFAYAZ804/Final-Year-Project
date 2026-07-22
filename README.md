@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="https://raw.githubusercontent.com/DANYALFAYAZ804/Final-Year-Project/main/src/assets/Trust-Flow-logo.png" alt="Trust Flow Logo" width="120">
+<img src="src/assets/Trust-Flow-logo.png" alt="Trust Flow Logo" width="120">
 
 # 🛡️ Trust Flow
 
@@ -449,7 +449,7 @@ curl -X POST https://final-year-project-production-9edf.up.railway.app/predict \
 
 **🏠 New Tab — Home**
 
-<img src="https://raw.githubusercontent.com/DANYALFAYAZ804/Final-Year-Project/main/docs/screenshots/home.png" alt="Home screen" width="800">
+<img src="docs/screenshots/home.png" alt="Home screen" width="800">
 
 *The Trust Flow start page, showing the live session shield with a running count of sites scanned and threats blocked. ✨*
 
@@ -457,7 +457,7 @@ curl -X POST https://final-year-project-production-9edf.up.railway.app/predict \
 
 **✅ Verified Safe — Trust Score Breakdown**
 
-<img src="https://raw.githubusercontent.com/DANYALFAYAZ804/Final-Year-Project/main/docs/screenshots/safe.png" alt="Safe site verified" width="800">
+<img src="docs/screenshots/safe.png" alt="Safe site verified" width="800">
 
 *A trusted domain (google.com) resolves instantly to a 100/100 trust score 🟢, shown directly in the address bar shield badge.*
 
@@ -465,7 +465,7 @@ curl -X POST https://final-year-project-production-9edf.up.railway.app/predict \
 
 **⛔ Malicious Site Blocked — Phishing Attack Prevented**
 
-<img src="https://raw.githubusercontent.com/DANYALFAYAZ804/Final-Year-Project/main/docs/screenshots/blocked.png" alt="Malicious site blocked" width="800">
+<img src="docs/screenshots/blocked.png" alt="Malicious site blocked" width="800">
 
 *A phishing domain is caught before it renders 🚫. The blocking screen shows the full trust-score breakdown — ML confidence, VirusTotal, and domain intelligence — along with the flagged URL.*
 
