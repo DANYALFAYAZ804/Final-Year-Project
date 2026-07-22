@@ -171,7 +171,8 @@ def check_email():
     # Search database for existing user
     try:
         existing_user = User.query.filter_by(email=email).first()
-    except SQLAlchemyError:
+    except SQLAlchemyError as e:
+        print(f"[DEBUG DB ERROR] {type(e).__name__}: {e}")
         return jsonify({"status": "error", "message": "Database is temporarily unavailable. Please try again shortly."}), 503
 
     if existing_user:
@@ -205,7 +206,8 @@ def login():
 
     try:
         user = User.query.filter_by(email=email).first()
-    except SQLAlchemyError:
+    except SQLAlchemyError as e:
+        print(f"[DEBUG DB ERROR] {type(e).__name__}: {e}")
         return jsonify({"status": "error", "message": "Database is temporarily unavailable. Please try again shortly."}), 503
 
     if not user:
@@ -220,7 +222,8 @@ def login():
             user.last_login_at = datetime.now()
             db.session.add(LoginHistory(user_id=user.user_id, ip_address=request.remote_addr, login_status='success'))
             db.session.commit()
-        except SQLAlchemyError:
+        except SQLAlchemyError as e:
+            print(f"[DEBUG DB ERROR] {type(e).__name__}: {e}")
             db.session.rollback()
             # Non-critical — still let the user in even if the timestamp/audit-log update failed.
 
@@ -246,7 +249,8 @@ def login():
     try:
         db.session.add(LoginHistory(user_id=user.user_id, ip_address=request.remote_addr, login_status='failed'))
         db.session.commit()
-    except SQLAlchemyError:
+    except SQLAlchemyError as e:
+        print(f"[DEBUG DB ERROR] {type(e).__name__}: {e}")
         db.session.rollback()
 
     return jsonify({"status": "error", "message": "Incorrect password. Please try again."}), 401
@@ -328,7 +332,8 @@ def validate_session():
 
     try:
         user = User.query.get(payload.get('user_id'))
-    except SQLAlchemyError:
+    except SQLAlchemyError as e:
+        print(f"[DEBUG DB ERROR] {type(e).__name__}: {e}")
         return jsonify({"status": "error", "message": "Database is temporarily unavailable. Please try again shortly."}), 503
 
     if not user:
@@ -397,7 +402,8 @@ def scan_url():
     try:
         db.session.add(scan_record)
         db.session.commit()
-    except SQLAlchemyError:
+    except SQLAlchemyError as e:
+        print(f"[DEBUG DB ERROR] {type(e).__name__}: {e}")
         db.session.rollback()
         return jsonify({"status": "error", "message": "Failed to save scan record"}), 500
 
@@ -421,7 +427,8 @@ def my_stats():
 
     try:
         scans = UserScan.query.filter_by(user_id=current_user_id).all()
-    except SQLAlchemyError:
+    except SQLAlchemyError as e:
+        print(f"[DEBUG DB ERROR] {type(e).__name__}: {e}")
         return jsonify({"error": "Database is temporarily unavailable. Please try again shortly."}), 503
 
     return jsonify({
