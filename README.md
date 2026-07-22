@@ -1,12 +1,12 @@
 <div align="center">
 
-<img src="./src/assets/Trust-Flow-logo.png" alt="Trust Flow Logo" width="120">
+<img src="https://raw.githubusercontent.com/DANYALFAYAZ804/Final-Year-Project/main/src/assets/Trust-Flow-logo.png" alt="Trust Flow Logo" width="120">
 
-# Trust Flow
+# 🛡️ Trust Flow
 
-### AI-Powered Zero-Trust Browser Security Platform
+### 🌐 AI-Powered Zero-Trust Browser Security Platform
 
-**Detect. Analyze. Protect.**
+**🔍 Detect. 🧠 Analyze. 🔐 Protect.**
 
 *A desktop security application that combines machine learning with Zero-Trust principles to identify phishing websites in real time — before a password is ever typed into them.*
 
@@ -30,7 +30,7 @@
 
 ---
 
-### Built With
+### 🧰 Built With
 
 <p align="center">
   <img src="https://skillicons.dev/icons?i=electron,python,flask,js,html,css,nodejs,npm,git,github,vscode" />
@@ -40,7 +40,7 @@
 
 ---
 
-## Demo
+## 🎥 Demo
 
 <div align="center">
 
@@ -54,34 +54,34 @@
 
 ---
 
-## Table of Contents
+## 📑 Table of Contents
 
-- [Overview](#overview)
-- [Key Objectives](#key-objectives)
-- [Features](#features)
-- [Why Trust Flow?](#why-trust-flow)
-- [System Architecture](#system-architecture)
-- [Technology Stack](#technology-stack)
-- [Threat Detection Engine](#threat-detection-engine)
-- [Project Structure](#project-structure)
-- [Installation](#installation)
-- [Running the Project](#running-the-project)
-- [REST API Documentation](#rest-api-documentation)
-- [Testing](#testing)
-- [Screenshots](#screenshots)
-- [Roadmap](#roadmap)
-- [FAQ](#faq)
-- [Contributing](#contributing)
-- [Contributors](#contributors)
-- [Citation](#citation)
-- [License](#license)
-- [Contact](#contact)
+- [📖 Overview](#overview)
+- [🎯 Key Objectives](#key-objectives)
+- [✨ Features](#features)
+- [⭐ Why Trust Flow?](#why-trust-flow)
+- [🏗️ System Architecture](#system-architecture)
+- [🧰 Technology Stack](#technology-stack)
+- [🔒 Threat Detection Engine](#threat-detection-engine)
+- [📁 Project Structure](#project-structure)
+- [🚀 Installation](#installation)
+- [▶️ Running the Project](#running-the-project)
+- [📡 REST API Documentation](#rest-api-documentation)
+- [🧪 Testing](#testing)
+- [📸 Screenshots](#screenshots)
+- [🗺️ Roadmap](#roadmap)
+- [❓ FAQ](#faq)
+- [🤝 Contributing](#contributing)
+- [👥 Contributors](#contributors)
+- [📖 Citation](#citation)
+- [📄 License](#license)
+- [📬 Contact](#contact)
 
 ---
 
-## Overview
+## 📖 Overview
 
-Trust Flow is an AI-powered desktop application built to combat phishing attacks using machine learning, guided by a **Zero-Trust security model**.
+Trust Flow is an AI-powered desktop application built to combat phishing attacks using machine learning, guided by a **Zero-Trust security model**. 🛡️✨
 
 Unlike traditional browser security solutions that rely primarily on static blacklists, Trust Flow analyzes dozens of structural and behavioral characteristics of a URL — and, where possible, the page's actual content — before determining whether it is safe or potentially malicious.
 
@@ -89,55 +89,55 @@ The Electron desktop application communicates with a Flask backend over a REST A
 
 ---
 
-## Key Objectives
+## 🎯 Key Objectives
 
-- Detect phishing websites before users can interact with them
-- Apply Zero-Trust security principles — nothing is trusted by default
-- Reduce reliance on static, easily outdated blacklists
-- Provide confidence-scored, explainable predictions
-- Deliver a fast, modern desktop browsing experience
-
----
-
-## Features
-
-### Security
-- Real-time phishing detection on every navigation
-- Zero-Trust architecture — even known-safe domains are re-checked if content looks suspicious
-- Page-content inspection (password field detection, external resource analysis)
-- Domain-age intelligence via WHOIS/RDAP lookups
-- VirusTotal community threat-data cross-referencing
-- Curated whitelist for well-known, high-traffic domains
-
-### Machine Learning
-- 45-feature extraction pipeline per URL
-- XGBoost classifier, hyperparameter-tuned with Optuna
-- Sigmoid-calibrated probability outputs
-- SMOTE-based class balancing during training
-- Homograph and punycode lookalike-domain detection
-
-### Desktop Application
-- Built with Electron + Vite
-- Multi-tab browsing with a dedicated New Tab page
-- Live trust-score shield badge in the address bar
-- Keyboard-lock protection on suspicious or malicious pages
-- Wizard-style Windows installer (license page, custom install directory)
-
-### Backend
-- Flask REST API with CORS support
-- Stateless `/predict` endpoint
-- Deployed on Railway with zero-downtime redeploys on push
-- Graceful heuristic fallback if the ML model is ever unavailable
+- 🕵️ Detect phishing websites before users can interact with them
+- 🚫 Apply Zero-Trust security principles — nothing is trusted by default
+- 📉 Reduce reliance on static, easily outdated blacklists
+- 📊 Provide confidence-scored, explainable predictions
+- ⚡ Deliver a fast, modern desktop browsing experience
 
 ---
 
-## Why Trust Flow?
+## ✨ Features
+
+### 🛡️ Security
+- ⚡ Real-time phishing detection on every navigation
+- 🚫 Zero-Trust architecture — even known-safe domains are re-checked if content looks suspicious
+- 🔍 Page-content inspection (password field detection, external resource analysis)
+- 🕰️ Domain-age intelligence via WHOIS/RDAP lookups
+- 🦠 VirusTotal community threat-data cross-referencing
+- ✅ Curated whitelist for well-known, high-traffic domains
+
+### 🤖 Machine Learning
+- 🧬 45-feature extraction pipeline per URL
+- 🌲 XGBoost classifier, hyperparameter-tuned with Optuna
+- 📐 Sigmoid-calibrated probability outputs
+- ⚖️ SMOTE-based class balancing during training
+- 🕵️‍♂️ Homograph and punycode lookalike-domain detection
+
+### 💻 Desktop Application
+- ⚛️ Built with Electron + Vite
+- 🗂️ Multi-tab browsing with a dedicated New Tab page
+- 🛡️ Live trust-score shield badge in the address bar
+- 🔒 Keyboard-lock protection on suspicious or malicious pages
+- 🧙 Wizard-style Windows installer (license page, custom install directory)
+
+### ⚙️ Backend
+- 🌶️ Flask REST API with CORS support
+- 🔗 Stateless `/predict` endpoint
+- 🚂 Deployed on Railway with zero-downtime redeploys on push
+- 🩹 Graceful heuristic fallback if the ML model is ever unavailable
+
+---
+
+## ⭐ Why Trust Flow?
 
 Traditional browser security depends primarily on blacklists, which fail against **newly registered phishing domains** that have not yet been reported. Trust Flow's ML-driven approach evaluates structural and behavioral characteristics that correlate with phishing regardless of whether the domain has ever been seen before — including domains that are technically "clean" by reputation but serve malicious content on a specific page, the same technique used by Google's own Safe Browsing test pages.
 
 ---
 
-## System Architecture
+## 🏗️ System Architecture
 
 ```mermaid
 flowchart LR
@@ -151,7 +151,7 @@ flowchart LR
     B --> A
 ```
 
-### Zero-Trust Request Flow
+### 🔐 Zero-Trust Request Flow
 
 ```mermaid
 flowchart TD
@@ -170,9 +170,9 @@ flowchart TD
 
 ---
 
-## Technology Stack
+## 🧰 Technology Stack
 
-### Frontend
+### 🎨 Frontend
 | Technology | Purpose |
 |---|---|
 | Electron | Desktop application shell |
@@ -180,7 +180,7 @@ flowchart TD
 | HTML5 / CSS3 | UI structure & styling |
 | JavaScript (ESM) | Application logic |
 
-### Backend
+### ⚙️ Backend
 | Technology | Purpose |
 |---|---|
 | Python | Backend language |
@@ -188,7 +188,7 @@ flowchart TD
 | Flask-CORS | Cross-origin support |
 | Gunicorn | Production WSGI server |
 
-### Machine Learning
+### 🤖 Machine Learning
 | Technology | Purpose |
 |---|---|
 | XGBoost | Gradient-boosted classifier |
@@ -198,7 +198,7 @@ flowchart TD
 | NumPy / Pandas | Feature & data handling |
 | Joblib | Model serialization |
 
-### Deployment
+### ☁️ Deployment
 | Platform | Usage |
 |---|---|
 | Railway | Backend hosting (auto-deploy on push) |
@@ -208,7 +208,7 @@ flowchart TD
 
 ---
 
-## Threat Detection Engine
+## 🔒 Threat Detection Engine
 
 Trust Flow's classifier evaluates **45 features** per URL, grouped into five categories:
 
@@ -230,15 +230,15 @@ final_score = (ML_score × 0.50) + (VirusTotal_score × 0.35) + (WHOIS_domain_ag
 
 | Score Range | Verdict |
 |---|---|
-| ≥ 75 | Safe |
-| 40–74 | Suspicious |
-| < 40 | Malicious |
+| ≥ 75 | ✅ Safe |
+| 40–74 | ⚠️ Suspicious |
+| < 40 | ⛔ Malicious |
 
 A hardcoded whitelist fast-passes a curated set of major, high-traffic domains — **unless** the page itself is found to contain a password field, in which case it is scored fully regardless of domain reputation. This closes the gap that pure domain whitelisting normally leaves open: a clean domain hosting a malicious page.
 
 ---
 
-## Project Structure
+## 📁 Project Structure
 
 ```text
 Final-Year-Project/
@@ -268,7 +268,7 @@ Final-Year-Project/
 
 ---
 
-## Prerequisites
+## ⚙️ Prerequisites
 
 | Software | Version |
 |---|---|
@@ -280,21 +280,21 @@ Final-Year-Project/
 
 ---
 
-## Installation
+## 🚀 Installation
 
-### For end users (no dev setup required)
+### 🙋 For end users (no dev setup required)
 
 Download the latest Windows installer directly:
 
 <p align="center">
   <a href="https://github.com/DANYALFAYAZ804/Final-Year-Project/releases/latest">
-    <img src="https://img.shields.io/badge/Download-Trust%20Flow%20for%20Windows-7c6ef2?style=for-the-badge" />
+    <img src="https://img.shields.io/badge/⬇%20Download-Trust%20Flow%20for%20Windows-7c6ef2?style=for-the-badge&logo=windows" />
   </a>
 </p>
 
-> Trust Flow is not yet code-signed, so Windows SmartScreen may show a warning on first run — this is expected for free, unsigned software. Click **More info → Run anyway** to proceed.
+> ⚠️ Trust Flow is not yet code-signed, so Windows SmartScreen may show a warning on first run — this is expected for free, unsigned software. Click **More info → Run anyway** to proceed.
 
-### For developers
+### 👨‍💻 For developers
 
 **1. Clone the repository**
 ```bash
@@ -314,21 +314,21 @@ pip install -r backend/requirements.txt
 
 ---
 
-## Running the Project
+## ▶️ Running the Project
 
-### Start the Flask backend
+### 🐍 Start the Flask backend
 ```bash
 cd backend
 python app.py
 ```
-Runs at `http://127.0.0.1:5000`
+Runs at `http://127.0.0.1:5000` 🟢
 
-### Start the Electron desktop app
+### ⚛️ Start the Electron desktop app
 ```bash
 npm start
 ```
 
-### Build the Windows installer
+### 📦 Build the Windows installer
 ```bash
 npm run make
 ```
@@ -336,11 +336,11 @@ Output: `out/make/wix/x64/*.msi`
 
 ---
 
-## REST API Documentation
+## 📡 REST API Documentation
 
 Base URL (production): `https://final-year-project-production-9edf.up.railway.app`
 
-### `GET /`
+### 🌐 `GET /`
 Health/status check for the root of the service.
 
 **Response**
@@ -351,7 +351,7 @@ Health/status check for the root of the service.
 }
 ```
 
-### `GET /health`
+### 💓 `GET /health`
 Reports whether the ML model is actually loaded, versus running on heuristic fallback.
 
 **Response**
@@ -363,7 +363,7 @@ Reports whether the ML model is actually loaded, versus running on heuristic fal
 }
 ```
 
-### `POST /predict`
+### 🔮 `POST /predict`
 Scores a single URL.
 
 **Request body**
@@ -407,14 +407,14 @@ Scores a single URL.
 
 | Label | Meaning |
 |---|---|
-| `safe` | Legitimate site |
-| `phishing` | Likely malicious / credential-harvesting site |
+| `safe` | ✅ Legitimate site |
+| `phishing` | 🚨 Likely malicious / credential-harvesting site |
 
 ---
 
-## Testing
+## 🧪 Testing
 
-### Example: known-safe URL
+### ✅ Example: known-safe URL
 ```bash
 curl -X POST https://final-year-project-production-9edf.up.railway.app/predict \
   -H "Content-Type: application/json" \
@@ -425,7 +425,7 @@ curl -X POST https://final-year-project-production-9edf.up.railway.app/predict \
 { "score": 1.0, "label": "safe", "confidence": 1.0, "phishing_probability": 0.0, "whitelist": true }
 ```
 
-### Example: structurally suspicious URL
+### ⚠️ Example: structurally suspicious URL
 ```bash
 curl -X POST https://final-year-project-production-9edf.up.railway.app/predict \
   -H "Content-Type: application/json" \
@@ -433,7 +433,7 @@ curl -X POST https://final-year-project-production-9edf.up.railway.app/predict \
 ```
 **Expected response** — high `phishing_probability`, `label: "phishing"`.
 
-### Example: password field on an otherwise clean-looking page
+### 🔑 Example: password field on an otherwise clean-looking page
 ```bash
 curl -X POST https://final-year-project-production-9edf.up.railway.app/predict \
   -H "Content-Type: application/json" \
@@ -443,117 +443,117 @@ curl -X POST https://final-year-project-production-9edf.up.railway.app/predict \
 
 ---
 
-## Screenshots
+## 📸 Screenshots
 
 <div align="center">
 
-**New Tab — Home**
+**🏠 New Tab — Home**
 
-![Home](docs/screenshots/home.png)
+<img src="https://raw.githubusercontent.com/DANYALFAYAZ804/Final-Year-Project/main/docs/screenshots/home.png" alt="Home screen" width="800">
 
-*The Trust Flow start page, showing the live session shield with a running count of sites scanned and threats blocked.*
-
-<br>
-
-**Verified Safe — Trust Score Breakdown**
-
-![Safe](docs/screenshots/safe.png)
-
-*A trusted domain (google.com) resolves instantly to a 100/100 trust score, shown directly in the address bar shield badge.*
+*The Trust Flow start page, showing the live session shield with a running count of sites scanned and threats blocked. ✨*
 
 <br>
 
-**Malicious Site Blocked — Phishing Attack Prevented**
+**✅ Verified Safe — Trust Score Breakdown**
 
-![Blocked](docs/screenshots/blocked.png)
+<img src="https://raw.githubusercontent.com/DANYALFAYAZ804/Final-Year-Project/main/docs/screenshots/safe.png" alt="Safe site verified" width="800">
 
-*A phishing domain is caught before it renders. The blocking screen shows the full trust-score breakdown — ML confidence, VirusTotal, and domain intelligence — along with the flagged URL.*
+*A trusted domain (google.com) resolves instantly to a 100/100 trust score 🟢, shown directly in the address bar shield badge.*
+
+<br>
+
+**⛔ Malicious Site Blocked — Phishing Attack Prevented**
+
+<img src="https://raw.githubusercontent.com/DANYALFAYAZ804/Final-Year-Project/main/docs/screenshots/blocked.png" alt="Malicious site blocked" width="800">
+
+*A phishing domain is caught before it renders 🚫. The blocking screen shows the full trust-score breakdown — ML confidence, VirusTotal, and domain intelligence — along with the flagged URL.*
 
 </div>
 
 ---
 
-## Roadmap
+## 🗺️ Roadmap
 
-### Version 1.0 — Shipped
-- Desktop application (Electron)
-- ML-based phishing detection (XGBoost)
-- Flask REST API on Railway
-- Whitelist + behavioral signal scoring
-- Windows installer (WiX wizard)
+### ✅ Version 1.0 — Shipped
+- 💻 Desktop application (Electron)
+- 🤖 ML-based phishing detection (XGBoost)
+- 🌶️ Flask REST API on Railway
+- 📋 Whitelist + behavioral signal scoring
+- 📦 Windows installer (WiX wizard)
 
-### Version 2.0 — Planned
-- Browser extension
-- Browsing history scanner
-- AI-generated threat explanations
-- Automatic threat reporting
-- Dark mode & expanded settings panel
+### 🚧 Version 2.0 — Planned
+- 🧩 Browser extension
+- 🕰️ Browsing history scanner
+- 💬 AI-generated threat explanations
+- 📢 Automatic threat reporting
+- 🌙 Dark mode & expanded settings panel
 
-### Version 3.0 — Planned
-- Real-time site monitoring
-- Cloud dashboard
-- Multi-user / enterprise management
-- Automatic model retraining pipeline
-- macOS & Linux support
+### 🔮 Version 3.0 — Planned
+- 📡 Real-time site monitoring
+- ☁️ Cloud dashboard
+- 👥 Multi-user / enterprise management
+- 🔁 Automatic model retraining pipeline
+- 🍎🐧 macOS & Linux support
 
 ---
 
-## FAQ
+## ❓ FAQ
 
-**Is Trust Flow production-ready?**
+**🚀 Is Trust Flow production-ready?**
 It is a functional, actively tested final-year project with a real ML pipeline and a live backend — solid for demonstration and personal use, but not yet hardened for enterprise deployment (no code signing, no automated model retraining loop).
 
-**Does it work offline?**
+**📶 Does it work offline?**
 No — `/predict` requires reaching the Railway-hosted backend. If the backend is unreachable, the app fails safe to a neutral default score rather than blocking all browsing.
 
-**Why is it Windows-only right now?**
+**🪟 Why is it Windows-only right now?**
 The installer is currently built with WiX (Windows-only). macOS/Linux packaging is on the roadmap — the Electron codebase itself is cross-platform, just not yet packaged for those targets.
 
-**Does Trust Flow collect or store my browsing data?**
+**🔒 Does Trust Flow collect or store my browsing data?**
 No user browsing data is persisted server-side. Each `/predict` call is stateless; only the URL (and optional page signals) are sent for scoring.
 
-**Why does Windows show a security warning when I install it?**
+**⚠️ Why does Windows show a security warning when I install it?**
 Trust Flow is not code-signed (that requires a paid certificate). This is expected for free, unsigned software — click "More info → Run anyway" to proceed.
 
-**Can I use my own VirusTotal API key?**
+**🦠 Can I use my own VirusTotal API key?**
 Yes — add it in the in-app Settings panel to enable VirusTotal cross-referencing.
 
-**How is the ML model trained?**
+**🧠 How is the ML model trained?**
 See [`backend/train.py`](backend/train.py) — a labeled dataset of safe and phishing URLs (including synthetic homograph/punycode variants) is used to train and calibrate an XGBoost classifier, validated against a held-out unseen-URL test set.
 
 ---
 
-## Contributing
+## 🤝 Contributing
 
-1. Fork this repository
-2. Create a branch: `git checkout -b feature/NewFeature`
-3. Commit: `git commit -m "Add New Feature"`
-4. Push: `git push origin feature/NewFeature`
-5. Open a Pull Request
+1. 🍴 Fork this repository
+2. 🌿 Create a branch: `git checkout -b feature/NewFeature`
+3. 💾 Commit: `git commit -m "Add New Feature"`
+4. 🚀 Push: `git push origin feature/NewFeature`
+5. 🔁 Open a Pull Request
 
 ---
 
-## Contributors
+## 👥 Contributors
 
 <a href="https://github.com/DANYALFAYAZ804/Final-Year-Project/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=DANYALFAYAZ804/Final-Year-Project" />
 </a>
 
-### Project Lead
+### 🌟 Project Lead
 
 <table>
 <tr>
 <td align="center">
 <img src="https://github.com/DANYALFAYAZ804.png" width="120"><br>
 <b>Danyal Fayaz</b><br>
-Project Lead · ML Engineer · Full-Stack Developer
+🧠 Project Lead · 🤖 ML Engineer · 💻 Full-Stack Developer
 </td>
 </tr>
 </table>
 
 ---
 
-## Citation
+## 📖 Citation
 
 If you reference Trust Flow in academic or research work, please cite it as:
 
@@ -569,32 +569,32 @@ If you reference Trust Flow in academic or research work, please cite it as:
 
 ---
 
-## License
+## 📄 License
 
-This project is licensed under the **MIT License** — see [`LICENSE`](LICENSE) for details.
-
----
-
-## Acknowledgements
-
-Electron · Flask · Scikit-Learn · XGBoost · Optuna · NumPy · Pandas · Railway · GitHub · Visual Studio Code
+This project is licensed under the **MIT License** — see [`LICENSE`](LICENSE) for details. ⚖️
 
 ---
 
-## Contact
+## 🙏 Acknowledgements
+
+⚛️ Electron · 🌶️ Flask · 🔬 Scikit-Learn · 🌲 XGBoost · 🎯 Optuna · 🔢 NumPy · 🐼 Pandas · 🚂 Railway · 🐙 GitHub · 💻 Visual Studio Code
+
+---
+
+## 📬 Contact
 
 **Danyal Fayaz**
 
-Email: danyalfayaz892@gmail.com
-GitHub: [github.com/DANYALFAYAZ804](https://github.com/DANYALFAYAZ804)
-LinkedIn: [linkedin.com/in/danyal-fayaz-b84820373](https://www.linkedin.com/in/danyal-fayaz-b84820373)
+📧 Email: danyalfayaz892@gmail.com
+🐙 GitHub: [github.com/DANYALFAYAZ804](https://github.com/DANYALFAYAZ804)
+💼 LinkedIn: [linkedin.com/in/danyal-fayaz-b84820373](https://www.linkedin.com/in/danyal-fayaz-b84820373)
 
 ---
 
 <div align="center">
 
-### Trust Flow — *"Don't Trust. Verify."*
+### 🛡️ Trust Flow — *"Don't Trust. Verify."*
 
-If this project was useful to you, consider starring the repository.
+⭐ If this project was useful to you, consider starring the repository.
 
 </div>
